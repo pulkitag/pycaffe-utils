@@ -13,8 +13,14 @@ import shutil
 import scipy.misc as scm
 import scipy.io as sio
 import copy
-import matlab.engine as men
-MATLAB_PATH = '/work4/pulkitag-code/pkgs/caffe-v2-2/matlab/caffe'
+from pycaffe_config import cfg
+
+if not cfg.IS_EC2:
+	import matlab.engine as men
+	MATLAB_PATH = '/work4/pulkitag-code/pkgs/caffe-v2-2/matlab/caffe'
+else:
+	MATLAB_PATH = ''
+
 
 ## 
 # Write array as a proto
@@ -665,7 +671,7 @@ def _mat_to_matconvnet(srcFile, targetFile, outFile):
 								obtained from first part of save_weights_for_matconvnet()
 		outFile: Where should the weights be saved. 
 	'''
-	meng = men.start_matlab()
+	#meng = men.start_matlab()
 	_ = meng.addpath(MATLAB_PATH, nargout=1)
 	meng.swap_weights_matconvnet(srcFile, targetFile, outFile, nargout=0)
 	meng.exit()

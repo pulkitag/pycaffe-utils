@@ -15,6 +15,9 @@ import other_utils as ou
 import shutil
 import copy
 import h5py as h5
+from pycaffe_config import cfg
+
+CAFFE_PATH = cfg.CAFFE_PATH
 
 def zf_saliency(net, imBatch, numOutputs, opName, ipName='data', stride=2, patchSz=11):
 	'''
@@ -96,7 +99,7 @@ def mapILSVRC12_labels_wnids(metaFile):
 ##
 # Read ILSVRC Data
 class ILSVRC12Reader:
-	def __init__(self, caffeDir='/work4/pulkitag-code/pkgs/caffe-v2-2'):
+	def __init__(self, caffeDir=CAFFE_PATH):
 		labelFile  = '/data1/pulkitag/ILSVRC-2012-raw/devkit-1.0/data/ILSVRC2012_validation_ground_truth.txt'
 		metaFile      = '/data1/pulkitag/ILSVRC-2012-raw/devkit-1.0/data/meta.mat'
 		self.imFile_     = '/data1/pulkitag/ILSVRC-2012-raw/256/val/ILSVRC2012_val_%08d.JPEG'
@@ -645,7 +648,7 @@ def test_log2acc(logFile):
 # Set the paths over here for using the utils code. 
 def get_caffe_paths():
 	paths  = {}
-	paths['caffeMain']   = '/work4/pulkitag-code/pkgs/caffe-v2-2' 
+	paths['caffeMain']   = CAFFE_PATH 
 	paths['tools']       = os.path.join(paths['caffeMain'], 'build', 'tools')
 	paths['pythonTest']  = os.path.join(paths['caffeMain'], 'python', 'test')
 	return paths
