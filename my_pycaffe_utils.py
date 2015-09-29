@@ -1114,6 +1114,10 @@ class SolverDef:
 	def write(self, outFile):
 		with open(outFile, 'w') as fid:
 			fid.write('# Autotmatically generated solver prototxt \n')
+			if self.data_.has_key('device_id'):
+				if type(self.data_['device_id']) == list:
+					#self.data_['device_id'] = ''.join('%d,' % d for d in self.data_['device_id'])[0:-1]
+					self.data_['device_id'] = self.data_['device_id'][0]
 			write_proto_param(fid, self.data_, numTabs=0)
 
 ##
@@ -1156,6 +1160,7 @@ class ExperimentFiles:
 			solverFile : The relative path of solver file
 			logFile    : Relative path of log file 
 			deviceId   : The GPU ID to be used.
+								 	 If multiple GPUS are used make it a list
 			repNum     : If none - then no repeats, otherwise use repeats. 
 		'''
 		self.modelDir_ = modelDir
@@ -1169,6 +1174,9 @@ class ExperimentFiles:
 		self.runTest_  = ou.chunk_filename(os.path.join(self.modelDir_, runFileTest))
 		self.paths_    = get_caffe_paths()
 		self.deviceId_ = deviceId
+		if not(type(deviceId) == list):
+			self.deviceId_ = [self.deviceId_]
+		self.deviceStr_ = ''.join('%d,' % d for d in self.deviceId_)[0:-1]
 		self.repNum_   = repNum
 		self.isTest_   = isTest
 		#To Prevent the results from getting lost I will copy over the log files
@@ -1195,7 +1203,7 @@ class ExperimentFiles:
 				if modelFile is not None:
 					f.write('\t --weights=%s' % modelFile)
 			f.write('\t --solver=%s' % self.solver_)
-			f.write('\t -gpu %d' % self.deviceId_)
+			f.write('\t -gpu %s' % self.deviceStr_)
 			f.write('\t 2>&1 | tee %s \n' % self.logTrain_)
 		give_run_permissions_(self.runTrain_)
 
@@ -1216,7 +1224,8 @@ class ExperimentFiles:
 			f.write('\t --weights=%s' % snapshot)
 			f.write('\t --model=%s ' % self.def_)
 			f.write('\t --iterations=%d' % testIterations)
-			f.write('\t -gpu %d' % self.deviceId_)
+			#For testing use one GPU only
+			f.write('\t -gpu %d' % self.deviceId_[0])
 			f.write('\t 2>&1 | tee %s \n' % self.logTest_)
 		give_run_permissions_(self.runTest_)
 

@@ -6,7 +6,7 @@ import socket
 from easydict import EasyDict as edict
 
 cfg = edict()
-cfg.hostname = socket.gethostname()
+cfg.HOSTNAME = socket.gethostname()
 if cfg.HOSTNAME in ['anakin', 'vader', 'spock', 'poseidon']:
 	cfg.IS_EC2 = False	
 	cfg.CAFFE_PATH = '/work4/pulkitag-code/pkgs/caffe-v2-3'
