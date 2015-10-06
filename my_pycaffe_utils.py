@@ -366,6 +366,24 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 			layerDef['top']   = '"%s"' % layerName
 		layerDef['loss_weight'] = 1
 
+	elif layerType in ['ContrastiveLoss']:
+		assert kwargs.has_key('bottom2') and kwargs.has_key('bottom3')
+		bottom2 = make_key('bottom', layerDef.keys())
+		layerDef[bottom2] = '"%s"' % kwargs['bottom2']
+		bottom3 = make_key('bottom', layerDef.keys())
+		layerDef[bottom3] = '"%s"' % kwargs['bottom3']
+		if kwargs.has_key('top'):
+			layerDef['top']   = '"%s"' % kwargs['top']
+		else:
+			layerDef['top']   = '"%s"' % layerName
+		#Add the contrastive loss margin
+		layerDef['contrastive_loss_param'] = co.OrderedDict()
+		if kwargs.has_key('margin'):
+			layerDef['constrastive_loss_param']['margin'] = kwargs['margin']
+		else:
+			layerDef['constrastive_loss_param']['margin'] = 1.0
+		layerDef['loss_weight'] = 1
+
 	elif layerType == 'Concat':
 		assert kwargs.has_key('bottom2')
 		assert kwargs.has_key('concat_dim')
@@ -1125,7 +1143,7 @@ class SolverDef:
 def get_defaults(setArgs, defArgs):
 	for key in setArgs.keys():
 		assert defArgs.has_key(key), 'Key not found: %s' % key
-		defArgs[key] = setArgs[key]
+		defArgs[key] = copy.deepcopy(setArgs[key])
 	return defArgs
 
 
