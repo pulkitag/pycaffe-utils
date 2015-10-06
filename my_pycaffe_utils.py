@@ -1017,6 +1017,12 @@ class ProtoDef():
 		ou.set_recursive_key(self.layers_[phase][layerName], propName, value)
 
 	##
+	#Get layer from name
+	def get_layer(self, layerName, phase='TRAIN'):
+		assert layerName in self.layers_[phase].keys(), 'Layer doesnot exists'
+		return copy.deepcopy(self.layers_[phase][layerName])
+
+	##
 	def add_layer(self, layerName, layer, phase='TRAIN'):
 		assert layerName not in self.layers_[phase].keys(), 'Layer already exists'
 		lProtoName = layer['name'][1:-1]
@@ -1084,6 +1090,10 @@ class ProtoDef():
 	def get_all_layernames(self, phase='TRAIN'):
 		names = [l for l in self.layers_[phase].keys()]
 		return names
+
+	##
+	#Append layers from protodef
+	
 
 ##
 # Class for making the solver_prototxt
@@ -1345,13 +1355,24 @@ class CaffeExperiment:
 		self.dirs_['exp']  = os.path.join(expDirPrefix,  dataExpName)
 		self.dirs_['snap'] = os.path.join(snapDirPrefix, dataExpName)  
 
-		#Relevant files. 
+		#Relevant files.
+		tmpDirName,_  = os.path.split(caffeExpName)
+		if tmpDirName == '': 
+			solverFile    = solverPrefix + '_' + caffeExpName + '.prototxt'
+			defFile       = defPrefix    + '_' + caffeExpName + '.prototxt'
+			defDeployFile = defPrefix    + '_' + caffeExpName + '_deploy.prototxt'
+			logFile       = logPrefix + '_' + '%s' + '_' + caffeExpName + '.txt'
+			runFile       = runPrefix + '_' + '%s' + '_' + caffeExpName + '.sh'
+			snapPrefix    = defPrefix + '_' + caffeExpName 
+		else:
+			solverFile    = caffeExpName + '_' + solverPrefix + '.prototxt'
+			defFile       = caffeExpName + '_' + defPrefix    + '.prototxt'
+			defDeployFile = caffeExpName + '_' + defPrefix    + '_deploy.prototxt'
+			logFile       = caffeExpName + '_' + '%s' + '_' + logPrefix + '.txt'
+			runFile       = caffeExpName + '_' + '%s' + '_' + logPrefix + '.sh'
+			snapPrefix    = caffeExpName + '_' + defPrefix 
+
 		self.files_   = {}
-		solverFile    = solverPrefix + '_' + caffeExpName + '.prototxt'
-		defFile       = defPrefix    + '_' + caffeExpName + '.prototxt'
-		defDeployFile = defPrefix    + '_' + caffeExpName + '_deploy.prototxt'
-		logFile       = logPrefix + '_' + '%s' + '_' + caffeExpName + '.txt'
-		runFile       = runPrefix + '_' + '%s' + '_' + caffeExpName + '.sh'
 		self.files_['solver'] = os.path.join(self.dirs_['exp'], solverFile) 
 		self.files_['netdef'] = os.path.join(self.dirs_['exp'], defFile)
 		self.files_['netdefDeploy'] = os.path.join(self.dirs_['exp'], defDeployFile) 
@@ -1361,7 +1382,6 @@ class CaffeExperiment:
 		self.files_['runTest']  = os.path.join(self.dirs_['exp'], runFile % 'test')
 
 		#snapshot
-		snapPrefix = defPrefix + '_' + caffeExpName 
 		self.files_['snap'] = os.path.join(snapDirPrefix, dataExpName,
 													snapPrefix + '_iter_%d.caffemodel')  
 		self.snapPrefix_    = '"%s"' % os.path.join(snapDirPrefix, dataExpName, snapPrefix)		
