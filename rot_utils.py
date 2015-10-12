@@ -357,7 +357,7 @@ def mat2euler(M, cy_thresh=None, seq='zyx'):
 			x = math.atan2(r32, r33)
 			z = math.atan2(r21, r11)
 		else:
-		  z = 0.0
+			z = 0.0
 			if r31 < 0:
 				y = np.pi/2
 				x = atan2(r12, r13)	

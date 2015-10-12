@@ -1016,6 +1016,32 @@ class ProtoDef():
 		#Set the value
 		ou.set_recursive_key(self.layers_[phase][layerName], propName, value)
 
+	##					
+	def del_layer_property(self, layerName, propName, phase='TRAIN',  propNum=0): 
+		'''
+			layerName: Name of the layer in which the property is present.
+			propName : Name of the property.
+								 If there is a recursive property like, layer['data_param']['source'],
+								 then provide a list.   
+			phase    : The phase in which to make edits. 
+			propNum  : Some properties like top can duplicated mutliple times in a layer, so which one.
+		'''
+		assert phase in ProtoDef.ProtoPhases, 'phase name not recognized'
+		assert layerName in self.layers_[phase].keys(), '%s layer not found' % layerName
+		if not isinstance(propName, list):
+			#Modify the propName to account for duplicates
+			propName = propName + '_$dup$' * propNum
+			propName = [propName]
+		else:
+			if isinstance(propNum, list):
+				assert len(propNum)==len(propName), 'Lengths mismatch'
+				propName = [p + i * '_$dup$' for (p,i) in zip(propName, propNum)]
+			else:
+				assert propNum==0,'propNum is not appropriately specified'
+		#Set the value
+		ou.del_recursive_key(self.layers_[phase][layerName], propName)
+
+
 	##
 	#Get layer from name
 	def get_layer(self, layerName, phase='TRAIN'):

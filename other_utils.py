@@ -33,6 +33,17 @@ def set_recursive_key(data, keyNames, val):
 		raise Exception('Keys not present')
 
 ##
+# Delete the recursive key
+def del_recursive_key(data, keyNames):
+	if verify_recursive_key(data, keyNames):
+		dat = reduce(lambda dat, key: dat[key], keyNames[:-1], data)
+		del dat[keyNames[-1]]
+	else:
+		raise Exception('Keys not present')
+
+
+
+##
 # Get the item from a recursive key
 def get_item_recursive_key(data, keyNames):
 	if verify_recursive_key(data, keyNames):
