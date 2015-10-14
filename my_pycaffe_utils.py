@@ -1191,7 +1191,7 @@ def make_solver(**kwargs):
 						 ('gamma', 0.1), ('stepsize', 100000), ('lr_policy', '"step"'),
 						 ('display', 20),('max_iter', 310000), ('snapshot', 10000),
 						 ('snapshot_prefix', '""'), ('solver_mode', 'GPU'), ('device_id', 1),
-						 ('debug_info', 'false')])
+						 ('debug_info', 'false'), ('clip_gradients', -1)])
 
 	defArgs = get_defaults(kwargs, defArgs)  
 	sol = SolverDef()
