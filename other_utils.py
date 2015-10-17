@@ -16,6 +16,7 @@ def verify_recursive_key(data, keyNames):
 		keyNames: list of keys 
 	'''
 	assert isinstance(keyNames, list), 'keyNames is required to be a list'
+	#print data, keyNames
 	assert data.has_key(keyNames[0]), '%s not present' % keyNames[0]
 	for i in range(1,len(keyNames)):
 		dat = reduce(lambda dat, key: dat[key], keyNames[0:i], data)
@@ -89,6 +90,7 @@ def find_path_key(data, keyName):
 # keyName should be a string or an list of a single name. 
 def get_item_dict(data, keyName):
 	keyPath = find_path_key(data, keyName)
+	#print keyPath
 	if len(keyPath)==0:
 		return None
 	else:

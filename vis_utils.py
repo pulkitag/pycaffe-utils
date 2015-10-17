@@ -15,7 +15,7 @@ TMP_DATA_DIR = '/data1/pulkitag/others/caffe_tmp_data/'
 
 ##
 # Plots pairs of images. 
-def plot_pairs(im1, im2, fig=None, titleStr=''):
+def plot_pairs(im1, im2, fig=None, titleStr='', figTitle=''):
 	if fig is None:
 		fig = plt.figure()
 	plt.figure(fig.number)
@@ -26,6 +26,7 @@ def plot_pairs(im1, im2, fig=None, titleStr=''):
 	ax2.imshow(im2.astype(np.uint8))
 	ax2.axis('off')
 	plt.title(titleStr)
+	fig.suptitle(figTitle)
 	plt.show()
 
 ##
