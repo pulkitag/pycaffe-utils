@@ -8,6 +8,7 @@ import copy
 import os
 import collections as co
 import pdb
+from easydict import EasyDict as edict
 ##
 # Verify if all the keys are present recursively in the dict
 def verify_recursive_key(data, keyNames):
@@ -95,6 +96,23 @@ def get_item_dict(data, keyName):
 		return None
 	else:
 		return get_item_recursive_key(data, keyPath)
+
+##
+#Find the key to the item in a dict
+def find_keyofitem(data, item):
+	keyName = None
+	for k in data.keys():
+		tp = type(data[k])
+		if tp == dict or tp ==edict:
+			keyPath = find_keyofitem(data[k], item) 
+			if keyPath is None:
+				continue
+			else:
+				keyName = [k] + keyPath
+		else:
+			if data[k] == item:
+				keyName = [k]
+	return keyName
 
 ##
 # Read the image

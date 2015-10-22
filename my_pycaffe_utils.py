@@ -483,7 +483,7 @@ def process_debug_log(logFile, setName='train'):
 	#Find the layerNames	
 	layerNames = []
 	for (count, l) in enumerate(lines):
-		if 'Setting up' in l:
+		if 'Setting up' in l and 'Setting up crop layers' not in l:
 			name = l.split()[-1]
 			if name not in layerNames:
 				layerNames.append(name)
@@ -531,7 +531,8 @@ def process_debug_log(logFile, setName='train'):
 			iters.append(iterNum)	
 		
 		if seeFlag and 'Forward' in l:
-			lName = find_in_line(l, 'layerName')	
+			lName = find_in_line(l, 'layerName')
+			print lName	
 			if 'top blob' in l:	
 				blobOp[lName].append(float(l.split()[-1]))
 			if 'param blob' in l:
@@ -555,6 +556,7 @@ def process_debug_log(logFile, setName='train'):
 	fid.close()
 	for name in layerNames:
 		print name
+		pdb.set_trace()
 		data = [np.array(a).reshape(1,len(a)) for a in allBlobOp[name]]
 		allBlobOp[name] = np.concatenate(data, axis=0)
 		data = [np.array(a).reshape(1,len(a)) for a in allBlobParam[name]]
