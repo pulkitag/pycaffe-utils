@@ -383,7 +383,7 @@ class GenericWindowWriter:
 		self.count_ = 0 #The number of examples written. 
 
 		dirName = os.path.dirname(fileName)
-		if not os.path.exists(dirName):
+		if len(dirName) >0 and not os.path.exists(dirName):
 			os.makedirs(dirName)
 
 		self.fid_ = open(self.file_, 'w')	
@@ -414,8 +414,13 @@ class GenericWindowWriter:
 		self.fid_.write('# %d\n' % self.count_)
 		#Write the images
 		for arg in args:
-			imName, imSz, bbox = arg
-			self.write_image_line_(imName, imSz, bbox)	
+			if type(arg)==str:
+				#Assuming arg is the imageline read from another window-file
+				#and the last character in the str is \n
+				self.fid_.write(arg)
+			else:
+				imName, imSz, bbox = arg
+				self.write_image_line_(imName, imSz, bbox)	
 		
 		#Write the label
 		lbStr = ['%f '] * self.lblSz_
