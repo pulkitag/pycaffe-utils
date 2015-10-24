@@ -2,7 +2,6 @@
 #  Major Wrappers.
 #
 
-
 import numpy as np
 import h5py
 import caffe
@@ -11,6 +10,8 @@ import matplotlib.pyplot as plt
 import os
 from six import string_types
 import copy
+from easydict import EasyDict as edict 
+import my_pycaffe_utils as mpu
 
 class layerSz:
 	def __init__(self, stride, filterSz):
@@ -274,8 +275,8 @@ class MyNet:
 		self.defFile_   = defFile
 		self.modelFile_ = modelFile
 		self.testMode_  = testMode
-		self.setup_network()
 		self.set_mode(isGPU, deviceId=deviceId)
+		self.setup_network()
 		self.transformer = {}
 
 
@@ -360,7 +361,7 @@ class MyNet:
 			if isinstance(meanDat, string_types):
 				meanDat = read_mean(meanDat)
 			_,h,w = meanDat.shape
-			assert self.imageDims[0]==h and self.imageDims[1]==w, 'imageDims must match mean Image size, (h,w), (imH, imW): (%d, %d), (%d,%d)' % (h,w,self.imageDims[0],self.imageDims[1])
+			assert self.imageDims[0]<=h and self.imageDims[1]<=w, 'imageDims must match mean Image size, (h,w), (imH, imW): (%d, %d), (%d,%d)' % (h,w,self.imageDims[0],self.imageDims[1])
 			meanDat  = meanDat[:, self.crop[0]:self.crop[2], self.crop[1]:self.crop[3]] 
 			self.transformer[ipName].set_mean(ipName, meanDat)
 	
@@ -547,9 +548,16 @@ class MyNet:
 			return weights
 
 
+class SolverDebugStore(object):
+	pass	
+
 class MySolver:
 	def __init__(self):
 		self.solver_ = None
+
+	def __del__(self):
+		del self.solver_
+		del self.net_
 
 	@classmethod
 	def from_file(cls, solFile):
@@ -557,7 +565,54 @@ class MySolver:
 		self.solver_     = caffe.SGDSolver(solFile)
 		self.net_        = self.solver_.net
 		self.layerNames_ = [l for l in self.net_._layer_names]
+		self.solFile_    = solFile
+		self.paramNames_ = self.net_.params.keys()
+		self.blobNames_  = self.net_.blobs.keys()
 		return self	
+
+	##
+	# Solver in the debug mode	
+	def debug_solve(self, maxIter=None):
+		self.solDef_ = mpu.SolverDef.from_file(self.solFile_)
+		if maxIter is None:
+			maxIter = self.solDef_.get_property('max_iter')	
+		#Storing the data
+		self.featVals    = edict()
+		self.paramVals   = [edict(), edict()]	
+		self.paramUpdate = [edict(), edict()]	
+		#Axis for plotting
+		self.featValsAx    = edict()
+		self.paramValsAx   = edict()
+		self.paramUpdateAx = edict()
+		plt.ion()
+		for i,b in enumerate(self.blobNames_):
+			self.featVals[b] = []
+			self.featValsAx[b] = plt.subplot(len(self.blobNames_),1,i+1)
+			self.featValsAx[b].set_title(b)
+
+		for p in self.paramNames_:
+			self.paramVals[0][p] = []
+			self.paramVals[1][p] = []
+			self.paramUpdate[0][p] = []
+			self.paramUpdate[1][p] = []
+
+		for i in range(maxIter):
+			self.solver_.step(1)
+			self.record_params()	
+
+	##
+	#Record the data
+	def record_params(self, isPlot=True):
+		for b in self.blobNames_:
+			self.featVals[b].append(np.mean(np.abs(self.net_.blobs[b].data)))
+			if isPlot:
+				N = len(self.featVals[b])
+				self.featValsAx[b].plot(range(N), self.featVals[b])
+				plt.draw()
+		for p in self.paramNames_:
+			for i in range(2):
+				self.paramVals[i][p].append(np.mean(np.abs(self.net_.params[p][i].data)))	
+				self.paramUpdate[i][p].append(np.mean(np.abs(self.net_.params[p][i].data)))	
 
 	##
 	# Return pointer to layer
