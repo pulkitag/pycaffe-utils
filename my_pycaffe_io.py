@@ -334,6 +334,7 @@ class GenericWindowReader:
 		self.numIm_ = int(self.fid_.readline())
 		self.lblSz_ = int(self.fid_.readline()) 
 		self.count_ = 0
+		self.open_  = True
 
 	def read_next(self):
 		if self.count_ == self.num_:
@@ -362,9 +363,15 @@ class GenericWindowReader:
 		lbls = np.concatenate(lbls)
 		return lbls
 		
+	def is_open(self):
+		return self.open_
+
+	def is_eof(self):
+		return self.count_ >= self.num_
+
 	def close(self):
 		self.fid_.close()
-
+		self.open_ = False
 
 ##
 # For writing generic window file layers. 
