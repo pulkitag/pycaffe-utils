@@ -16,7 +16,7 @@ import copy
 from pycaffe_config import cfg
 
 if not cfg.IS_EC2:
-	import matlab.engine as men
+	#import matlab.engine as men
 	MATLAB_PATH = '/work4/pulkitag-code/pkgs/caffe-v2-2/matlab/caffe'
 else:
 	MATLAB_PATH = ''
