@@ -291,7 +291,7 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 		layerDef[ipKey]['weight_filler']['std']  = str(0.005)
 		layerDef[ipKey]['bias_filler'] = {}
 		layerDef[ipKey]['bias_filler']['type'] = '"constant"'
-		layerDef[ipKey]['bias_filler']['value']  = str(0.)
+		layerDef[ipKey]['bias_filler']['value']  = str(1.)
 
 	elif layerType == 'Convolution':
 		layerDef['top']    = '"%s"' % layerName
