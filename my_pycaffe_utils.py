@@ -736,11 +736,12 @@ def get_proto_param(lines):
 			braCount -= 1
 		else:
 			#print l
-			splitVals = l.split()
+			splitVals = l.strip().split(':')
 			if len(splitVals) > 2:
 				raise Exception('Improper format for: %s, l.split() should only produce 2 values' % l)
-			name, val  = l.split()
-			name       = name[:-1]
+			name, val  = splitVals
+			name       = name.strip()
+			val        = val.strip()
 			name       = make_key(name, data.keys(), dupStr=dupStr)
 			data[name] = val
 		if braCount == -1:
@@ -992,6 +993,22 @@ class ProtoDef():
 				assert propNum==0,'propNum is not appropriately specified'
 		return ou.get_item_dict(self.layers_[phase][layerName], propName)	
 
+	def rename_layer(self, oldLayerName, newLayerName, phase='TRAIN'):
+		assert oldLayerName in self.layers_[phase].keys(), '%s layer not found' % layerName
+		layerTemp = co.OrderedDict()
+		for k,v in self.layers_[phase].iteritems():
+			if k == oldLayerName:
+				layerTemp[newLayerName] = copy.deepcopy(self.layers_[phase][oldLayerName])
+				layerTemp[newLayerName]['name'] = '"%s"' % newLayerName
+			else:
+				layerTemp[k] = copy.deepcopy(self.layers_[phase][k])
+		#Delete the old keyrs
+		for k in self.layers_[phase].keys():
+			del self.layers_[phase][k]
+		#Copy the values
+		for k in layerTemp.keys():
+			self.layers_[phase][k] = copy.deepcopy(layerTemp[k])
+
 	##					
 	def set_layer_property(self, layerName, propName, value, phase='TRAIN',  propNum=0): 
 		'''
@@ -1017,7 +1034,10 @@ class ProtoDef():
 				assert propNum==0,'propNum is not appropriately specified'
 		#Set the value
 		ou.set_recursive_key(self.layers_[phase][layerName], propName, value)
-
+		#If the name of the layer is changing
+		if len(propName) ==1 and propName[0]=='name':
+			self.rename_layer(layerName, value, phase=phase)	
+	
 	##					
 	def del_layer_property(self, layerName, propName, phase='TRAIN',  propNum=0): 
 		'''
