@@ -1008,6 +1008,7 @@ class ProtoDef():
 		#Copy the values
 		for k in layerTemp.keys():
 			self.layers_[phase][k] = copy.deepcopy(layerTemp[k])
+		print ('WARNING RENAME %s LAYER - DOESNOT CHANGES THE TOP NAME or PARAM NAMES' % oldLayerName)
 
 	##					
 	def set_layer_property(self, layerName, propName, value, phase='TRAIN',  propNum=0): 
