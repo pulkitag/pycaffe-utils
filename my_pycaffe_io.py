@@ -2,7 +2,7 @@
 #  IO operations. 
 #
 
-import h5py as h5
+#import h5py as h5
 import numpy as np
 import my_pycaffe as mp
 import caffe
@@ -87,11 +87,9 @@ def resize_mean(inFile, outFile, imSz):
 	mn = scm.imresize(mn, (imSz, imSz)).transpose((2,0,1)).reshape((1,ch,imSz,imSz))
 	write_proto(mn.astype(dType), outFile)
 
-
+'''
 def ims2hdf5(im, labels, batchSz, batchPath, isColor=True, batchStNum=1, isUInt8=True, scale=None, newLabels=False):
-	'''
-		Converts an image dataset into hdf5
-	'''
+	#Converts an image dataset into hdf5
 	h5SrcFile = os.path.join(batchPath, 'h5source.txt')
 	strFid    = open(h5SrcFile, 'w')
 
@@ -137,7 +135,7 @@ def ims2hdf5(im, labels, batchSz, batchPath, isColor=True, batchStNum=1, isUInt8
 		strFid.write('%s \n' % h5File)
 		count += 1	
 	strFid.close()
-
+'''
 
 class DbSaver:
 	def __init__(self, dbName, isLMDB=True):

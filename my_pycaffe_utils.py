@@ -14,7 +14,7 @@ import collections as co
 import other_utils as ou
 import shutil
 import copy
-import h5py as h5
+#import h5py as h5
 from pycaffe_config import cfg
 
 CAFFE_PATH = cfg.CAFFE_PATH
