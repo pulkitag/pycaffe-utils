@@ -445,6 +445,26 @@ def get_siamese_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **
 	def2 = get_layerdef_for_proto(layerType, layerName, bottom, numOutput=numOutput, **kwargs)
 	return def1, def2
 
+
+##
+#Make a siamese counter part
+def siamese_from_layerdef(lDef, botName=None):
+	name, top, bot = lDef['name'], lDef['top'], lDef['bottom']
+	suffix = '_p'
+	smName  = '"%s"' % (name[1:-1] + suffix)
+	smTop   = '"%s"' % (top[1:-1]  + suffix)
+	if botName is not None:	
+		smBot = '"%s"' % botName
+	else:
+		smBot = '"%s"' % (bot[1:-1] + suffix)
+
+	smDef = co.OrderedDict(lDef)
+	smDef['name'] = smName
+	smDef['top']  = smTop
+	smDef['bottom']  = smBot
+	return smDef
+
+
 ##
 #Helper fucntion for process_debug_log - helps find specific things in the line
 def find_in_line(l, findType):
@@ -796,7 +816,13 @@ def write_proto_param_layer(fid, protoData):
 # Reads the architecture definition file and converts it into a nice, programmable format. 		
 class ProtoDef():
 	ProtoPhases = ['TRAIN', 'TEST'] 
-	def __init__(self, defFile):
+	def __init__(self, defFile=None, layerDict=None):
+		if layerDict is not None:
+			assert layerDict.has_key('TRAIN') and layerDict.has_key('TEST')
+			self.layers_   = co.OrderedDict(layerDict)
+			self.initData_ = []
+			return 
+		#If initializing from a file
 		self.layers_ = {}
 		self.layers_['TRAIN'] = co.OrderedDict()	
 		self.layers_['TEST']  = co.OrderedDict()
@@ -844,9 +870,52 @@ class ProtoDef():
 
 	##
 	# Convert a network into a siamese network. 
-	def make_siamese(self):
-		print "WARNING: Only Convolution and InnerProduct layers are assumed to have params"
-		print "To be completed"	
+	def get_siamese(self, firstName, lastName):
+		'''
+			Make Siamese from bot to top layers
+		'''
+		stList, enList = co.OrderedDict(), co.OrderedDict()
+		sList1 = co.OrderedDict()
+		sList2 = co.OrderedDict()
+		for ph in ['TRAIN', 'TEST']:
+			stList[ph], enList[ph] = co.OrderedDict(), co.OrderedDict()
+			sList1[ph], sList2[ph] = co.OrderedDict(), co.OrderedDict()
+			stFlag, enFlag = False, False
+			for lKey, layer in self.layers_[ph].iteritems():
+				if not stFlag and lKey == firstName:
+					stFlag = True
+				if not stFlag and not enFlag:
+					print (lKey)
+					stList[ph][lKey] = copy.deepcopy(layer)
+				#At the end of the siamese net. 
+				if enFlag:
+					print(lKey)
+					enList[ph][lKey] = copy.deepcopy(layer)
+				#Copy the layers into the siamese streams
+				if stFlag:
+					sList1[ph][lKey] = copy.deepcopy(layer)
+					siamLayer    = siamese_from_layerdef(layer)
+					siamName     = siamLayer['name'][1:-1]
+					print (lKey, siamName)
+					sList2[ph][siamName] = siamLayer
+				if lKey == lastName:
+					stFlag = False
+					enFlag = True
+		#Combine the layers
+		netDef = co.OrderedDict()
+		for ph in ['TRAIN', 'TEST']:
+			netDef[ph] = co.OrderedDict()
+			for k, v in stList[ph].iteritems():
+				netDef[ph][k] = v
+			for k, v in sList1[ph].iteritems():
+				netDef[ph][k] = v
+			for k, v in sList2[ph].iteritems():
+				netDef[ph][k] = v
+			for k, v in enList[ph].iteritems():
+				netDef[ph][k] = v
+		protoDef =  ProtoDef(layerDict=netDef)	
+		protoDef.initData_ = copy.deepcopy(self.initData_)
+		return protoDef
 
 	##
 	#Make a deploy prototxt file
