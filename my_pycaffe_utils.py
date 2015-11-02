@@ -1021,10 +1021,19 @@ class ProtoDef():
 			Generally the learning layers have weights and biases
 			Currently this code will only work for these layers. 
 		'''
-		self.set_layer_property(layerName, ['param','lr_mult'], 0., phase=phase, propNum=[0, 0])
-		self.set_layer_property(layerName, ['param','lr_mult'], 0., phase=phase, propNum=[1, 0])
-		self.set_layer_property(layerName, ['param','decay_mult'], 0., phase=phase, propNum=[0, 0])
-		self.set_layer_property(layerName, ['param','decay_mult'], 0., phase=phase, propNum=[1, 0])
+		lType = self.get_layer_property(layerName, 'type', phase=phase)
+		if lType in ['PReLU']:
+			numParam = 1
+		else:
+			numParam = 2
+		if numParam == 1:
+			self.set_layer_property(layerName, ['param','lr_mult'], 0., phase=phase, propNum=[0, 0])
+			self.set_layer_property(layerName, ['param','decay_mult'], 0., 
+																				phase=phase, propNum=[0, 0])
+		else:
+			self.set_layer_property(layerName, ['param','lr_mult'], 0., phase=phase, propNum=[1, 0])
+			self.set_layer_property(layerName, ['param','decay_mult'], 0.,
+																			 phase=phase, propNum=[1, 0])
 
 	##
 	# Set std for all the layers
