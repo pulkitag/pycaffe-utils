@@ -1022,7 +1022,7 @@ class ProtoDef():
 			Currently this code will only work for these layers. 
 		'''
 		lType = self.get_layer_property(layerName, 'type', phase=phase)
-		if lType in ['PReLU']:
+		if lType[1:-1] in ['PReLU']:
 			numParam = 1
 		else:
 			numParam = 2
