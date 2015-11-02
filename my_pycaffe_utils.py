@@ -868,6 +868,32 @@ class ProtoDef():
 		netDef.make_deploy(dataLayerNames=dataLayerNames, imSz=imSz, **kwargs)
 		return netDef
 
+	@classmethod
+	def visproto_from_proto(cls, initDef, dataLayerNames=['window_data'],
+													 imSz=[[3,101,101]], delAbove='conv1'):
+		if isinstance(initDef, ProtoDef):
+			netDef = copy.deepcopy(initDef) 
+		else:
+			assert isinstance(initDef, str), 'Invalid format of netDef'
+			netDef = cls(initDef)
+		for ph in ['TRAIN', 'TEST']:
+			delFlag = False
+			lNames = netDef.get_all_layernames(phase=ph)
+			for l in lNames:
+				if l in dataLayerNames or delFlag:
+					netDef.del_layer(l)	
+				if l == delAbove:
+					delFlag = True
+		#Make the approrpiate header
+		assert (len(dataLayerNames) == 1)
+		ch, h, w = imSz[0]
+		netDef.initData_.append('input: "%s"\n' % 'data')
+		netDef.initData_.append('input_dim: %d\n' % 10)
+		netDef.initData_.append('input_dim: %d\n' % ch)
+		netDef.initData_.append('input_dim: %d\n' % h)
+		netDef.initData_.append('input_dim: %d\n' % w)
+		return netDef
+
 	##
 	# Convert a network into a siamese network. 
 	def get_siamese(self, firstName, lastName):
@@ -901,6 +927,9 @@ class ProtoDef():
 				if lKey == lastName:
 					stFlag = False
 					enFlag = True
+					#Make the Concat Layer
+					#concatDef = get_layerdef_for_proto('concat')				
+	
 		#Combine the layers
 		netDef = co.OrderedDict()
 		for ph in ['TRAIN', 'TEST']:
@@ -992,10 +1021,19 @@ class ProtoDef():
 			Generally the learning layers have weights and biases
 			Currently this code will only work for these layers. 
 		'''
-		self.set_layer_property(layerName, ['param','lr_mult'], 0., phase=phase, propNum=[0, 0])
-		self.set_layer_property(layerName, ['param','lr_mult'], 0., phase=phase, propNum=[1, 0])
-		self.set_layer_property(layerName, ['param','decay_mult'], 0., phase=phase, propNum=[0, 0])
-		self.set_layer_property(layerName, ['param','decay_mult'], 0., phase=phase, propNum=[1, 0])
+		lType = self.get_layer_property(layerName, 'type', phase=phase)
+		if lType in ['PReLU']:
+			numParam = 1
+		else:
+			numParam = 2
+		if numParam == 1:
+			self.set_layer_property(layerName, ['param','lr_mult'], 0., phase=phase, propNum=[0, 0])
+			self.set_layer_property(layerName, ['param','decay_mult'], 0., 
+																				phase=phase, propNum=[0, 0])
+		else:
+			self.set_layer_property(layerName, ['param','lr_mult'], 0., phase=phase, propNum=[1, 0])
+			self.set_layer_property(layerName, ['param','decay_mult'], 0.,
+																			 phase=phase, propNum=[1, 0])
 
 	##
 	# Set std for all the layers
