@@ -1026,11 +1026,10 @@ class ProtoDef():
 			numParam = 1
 		else:
 			numParam = 2
-		if numParam == 1:
-			self.set_layer_property(layerName, ['param','lr_mult'], 0., phase=phase, propNum=[0, 0])
-			self.set_layer_property(layerName, ['param','decay_mult'], 0., 
+		self.set_layer_property(layerName, ['param','lr_mult'], 0., phase=phase, propNum=[0, 0])
+		self.set_layer_property(layerName, ['param','decay_mult'], 0., 
 																				phase=phase, propNum=[0, 0])
-		else:
+		if numParam > 1:
 			self.set_layer_property(layerName, ['param','lr_mult'], 0., phase=phase, propNum=[1, 0])
 			self.set_layer_property(layerName, ['param','decay_mult'], 0.,
 																			 phase=phase, propNum=[1, 0])
