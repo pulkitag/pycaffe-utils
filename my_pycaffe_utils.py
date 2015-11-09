@@ -1416,7 +1416,7 @@ class ExperimentFiles:
 	# Initialiaze a solver from the file/SolverDef instance. 
 	def init_solver_from_external(self, inFile):
 		if isinstance(inFile, SolverDef):
-			self.solDef_ = inFile
+			self.solDef_ = copy.deepcopy(inFile)
 		else:
 			self.solDef_ = SolverDef.from_file(inFile)
 		self.solDef_.add_property('device_id', self.deviceId_)
