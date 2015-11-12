@@ -948,8 +948,9 @@ class ProtoDef():
 
 	##
 	#Make a deploy prototxt file
-	def make_deploy(self, dataLayerNames=['data'], imSz=[[3,128,128]], 
-									batchSz=None, delLayers=None):
+	def make_deploy(self, dataLayerNames=['data'], newDataLayerNames=None,
+								  imSz=[[3,128,128]], 
+									batchSz=None, delLayers=None, delAbove=None):
 		'''
 			the deployNet will have only 1 phase, by default it will be set to TRAIN
 			From the original network copy the data layers of the test phase and all
@@ -962,6 +963,7 @@ class ProtoDef():
 		trPhase = 'TRAIN'
 		tePhase = 'TEST'
 		#Copy the data layers from the test phase
+		count = 0
 		for name,sz in zip(dataLayerNames, imSz):
 			assert self.layers_[tePhase].has_key(name), '%s data layer not found' % name
 			if batchSz is None:
@@ -970,7 +972,13 @@ class ProtoDef():
 			layerName   = self.layers_[tePhase][name]['name']
 			sz          = [batchSz] + sz
 			szDict = {'ipDims': sz}
-			deployNet[trPhase][name] = get_layerdef_for_proto('DeployData', name, None, **szDict)	
+			if newDataLayerNames is not None:
+				name = newDataLayerNames[count]
+			deployNet[trPhase][name] = get_layerdef_for_proto('DeployData', name, None, **szDict)
+			count += 1	
+		#Delete all layers above a certain layer if required
+		if delAbove is not None:
+			self.del_all_layers_above(delAbove)
 		#Copy all the other layers from the training network
 		for name in self.layers_[trPhase].keys():
 			if name in dataLayerNames:
@@ -980,8 +988,9 @@ class ProtoDef():
 					if name in delLayers:
 						continue
 				deployNet[trPhase][name] = copy.deepcopy(self.layers_[trPhase][name])
+		#Convert the current proto into the deploy proto
 		self.layers_ = copy.deepcopy(deployNet)	
-	
+			
 	##
 	# Write the prototxt architecture file
 	def write(self, outFile):
@@ -1695,18 +1704,29 @@ class CaffeTest:
 		self.ipMode_    = 'lmdb'
 		self.testCount_ = 0
 		return self
+	
+	@classmethod
+	def from_caffe_exp(cls, caffeExp, deviceId=0):
+		self      = cls()
+		self.exp_ = caffeExp
+		self.device_ = deviceId
+		self.ipMode_    = None
+		return self
 
 	##
-	def setup_network(self, opNames, dataLayerNames=['data'], labelBlob=['label'], 
+	def setup_network(self, opNames, dataLayerNames=['data'], 
+						 newDataLayerNames = None, labelBlob=['label'], 
 						 imH=128, imW=128, cropH=112, cropW=112, channels=3,
 						 modelIterations=10000, 
 						 batchSz=100, delLayers=['accuracy', 'loss'],
-						 maxClassCount=None, maxLabel=None):
+						 maxClassCount=None, maxLabel=None, meanFile=None,
+						 delAbove=None, isAccuracyTest=True):
 		'''
 			This will simply store the gt and predicted labels
 			opName         : The layer from which the predicted features need to be taken.
 											 should be a list. 
 			dataLayerName  : Layer to which feed the data
+			newDataLayerName: Rename the datalayer
 			labelBlob      : The name of the label blob
 			modelIterations: The number of iterations for which caffe-model needs to be used. 
 			maxClassCount  : If we want to test so that only maxClassCount examples of each
@@ -1717,41 +1737,57 @@ class CaffeTest:
 		if not isinstance(opNames, list):
 			opNames = [opNames]
 		assert len(dataLayerNames)==1
+		assert len(dataLayerNames)==len(newDataLayerNames)
+	
+		#Get the meanFile is present
+		if meanFile is None:
+			meanFile = self.exp_.get_layer_property(dataLayerNames[0], 'mean_file')
+			if meanFile is not None:
+				meanFile = meanFile[1:-1]
+				print 'Using mean file: %s' % meanFile
+			else:
+				print 'No mean file found'
+		#Get Scale if present
+		scale    = self.exp_.get_layer_property(dataLayerNames[0], 'scale')
+		if scale is not None:
+			scale = float(scale)
+			print 'Setting scale as :%f' % scale
+		else:
+			scale = None
+
 		#Make the deploy file
 		self.exp_.make_deploy(dataLayerNames = dataLayerNames, imSz = [[channels, cropH, cropW]], 
-								batchSz = batchSz, delLayers = delLayers)
+								batchSz = batchSz, delLayers = delLayers, delAbove=delAbove,
+								newDataLayerNames=newDataLayerNames)
 		self.netdef_ = self.exp_.get_deploy_file()
 		#Name of the model
 		self.model_  = self.exp_.get_snapshot_name(numIter=modelIterations)
 		#Setup the network
 		self.net_    = mp.MyNet(self.netdef_, self.model_, deviceId=self.device_,
 											testMode=True)
-		#Set the data pre-processing
-		meanFile = self.exp_.get_layer_property(dataLayerNames[0], 'mean_file')
-		if meanFile is not None:
-			meanFile = meanFile[1:-1]
-			print 'Using mean file: %s' % meanFile
-		else:
-			print 'No mean file found'
+		if newDataLayerNames is not None:
+			dataLayerNames = newDataLayerNames
 
-		scale = self.exp_.get_layer_property(dataLayerNames[0], 'scale')
-		if scale is not None:
-			scale = float(scale)
-			print 'Setting scale as :%f' % scale
+		if self.ipMode_ == 'lmdb':
+			isBlobFormat = True
+			chSwap       = None
 		else:
-			scale = None
-		self.net_.set_preprocess(ipName = dataLayerNames[0], isBlobFormat=True,
+			isBlobFormat = False
+			chSwap       = (2,1,0) 
+
+		self.net_.set_preprocess(ipName = dataLayerNames[0], isBlobFormat=isBlobFormat,
 										imageDims = (imH, imW, channels),
-										cropDims  = (cropH, cropW), chSwap=None,
+										cropDims  = (cropH, cropW), chSwap=chSwap,
 										rawScale = scale, meanDat = meanFile)  
 		self.ip_      = dataLayerNames[0]
 		self.op_      = opNames
 		self.batchSz_ = batchSz
-	
-		self.maxClsCount_ = maxClassCount
-		if maxClassCount is not None:
-			assert maxLabel is not None, 'Specify maxLabel'
-			self.clsCount_  = np.zeros((maxLabel,))
+
+		if isAccuracyTest:	
+			self.maxClsCount_ = maxClassCount
+			if maxClassCount is not None:
+				assert maxLabel is not None, 'Specify maxLabel'
+				self.clsCount_  = np.zeros((maxLabel,))
 
 
 	def get_data(self):
