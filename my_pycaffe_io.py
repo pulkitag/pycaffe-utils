@@ -14,6 +14,7 @@ import scipy.misc as scm
 import scipy.io as sio
 import copy
 from pycaffe_config import cfg
+from os import path as osp
 
 if not cfg.IS_EC2:
 	#import matlab.engine as men
@@ -349,7 +350,19 @@ class GenericWindowReader:
 		lbls = self.fid_.readline().split()
 		lbls = np.array([float(l) for l in lbls]).reshape(1,self.lblSz_)
 		return imDat, lbls
-				
+		
+	#Get the processed images and labels
+	def read_next_processed(self, rootFolder):
+		imDat, lbls = self.read_next()
+		ims = []
+		for l in imDat:
+			imName, ch, h, w, x1, y1, x2, y2 = l.strip().split()
+			imName = osp.join(rootFolder, imName)
+			x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+			im = scm.imread(imName)
+			ims.append(im[y1:y2, x1:x2,:])
+		return ims, lbls[0]	
+	
 	def get_all_labels(self):
 		readFlag = True
 		lbls     = []

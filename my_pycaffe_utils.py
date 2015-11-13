@@ -1720,7 +1720,8 @@ class CaffeTest:
 						 modelIterations=10000, 
 						 batchSz=100, delLayers=['accuracy', 'loss'],
 						 maxClassCount=None, maxLabel=None, meanFile=None,
-						 delAbove=None, isAccuracyTest=True):
+						 delAbove=None, isAccuracyTest=True,
+						 chSwap=None):
 		'''
 			This will simply store the gt and predicted labels
 			opName         : The layer from which the predicted features need to be taken.
@@ -1737,7 +1738,8 @@ class CaffeTest:
 		if not isinstance(opNames, list):
 			opNames = [opNames]
 		assert len(dataLayerNames)==1
-		assert len(dataLayerNames)==len(newDataLayerNames)
+		if newDataLayerNames is not None:
+			assert len(dataLayerNames)==len(newDataLayerNames)
 	
 		#Get the meanFile is present
 		if meanFile is None:
@@ -1773,7 +1775,8 @@ class CaffeTest:
 			chSwap       = None
 		else:
 			isBlobFormat = False
-			chSwap       = (2,1,0) 
+			if chSwap is None:
+				chSwap       = (2,1,0) 
 
 		self.net_.set_preprocess(ipName = dataLayerNames[0], isBlobFormat=isBlobFormat,
 										imageDims = (imH, imW, channels),

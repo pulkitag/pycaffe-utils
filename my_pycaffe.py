@@ -335,6 +335,7 @@ class MyNet:
 
 		if chSwap is not None:
 			#Required for eg RGB to BGR conversion.
+			print (ipName, chSwap)
 			self.transformer[ipName].set_channel_swap(ipName, chSwap)
 	
 		if rawScale is not None:
