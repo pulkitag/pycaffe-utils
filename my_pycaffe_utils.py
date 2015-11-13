@@ -402,6 +402,26 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 		layerDef[make_key('input_dim', layerDef.keys())] = ipDims[2]		
 		layerDef[make_key('input_dim', layerDef.keys())] = ipDims[3]		
 
+	elif layerType in ['MemoryData']:
+		del layerDef['bottom']
+		#First top
+		assert kwargs.has_key('top')
+		layerDef['top'] = '"%s"' % kwargs['top']
+		#Second top
+		key    = make_key('top', layerDef.keys())
+		if kwargs.has_key('top2'):	
+			keyVal = kwargs['top2']
+		else:
+			keyVal = 'ignore'
+		layerDef[key] = '"%s"' % keyVal
+		#Input dimensions
+		ipDims = kwargs['ipDims'] #(batch_size, channels, h, w)
+		layerDef['memory_data_param'] = dict()
+		layerDef['memory_data_param']['batch_size'] = ipDims[0]
+		layerDef['memory_data_param']['channels']   = ipDims[1]
+		layerDef['memory_data_param']['height']     = ipDims[2]
+		layerDef['memory_data_param']['width']      = ipDims[3]
+		
 	elif layerType in ['RandomNoise']:
 		layerDef['top']    = '"%s"' % layerName
 		if kwargs.has_key('adaptive_sigma'):
@@ -805,6 +825,7 @@ def write_proto_param_layer(fid, protoData):
 	if layerType =='DeployData':
 		layerProto = copy.deepcopy(protoData)
 		del layerProto['name'], layerProto['bottom'], layerProto['type']
+		#print (layerProto)
 		write_proto_param(fid, layerProto, 0)
 	else:	
 		fid.write('layer { \n')
@@ -866,6 +887,47 @@ class ProtoDef():
 			assert isinstance(initDef, str), 'Invalid format of netDef'
 			netDef = cls(initDef)
 		netDef.make_deploy(dataLayerNames=dataLayerNames, imSz=imSz, **kwargs)
+		return netDef
+
+	##
+	# Protofile useful for reconstruction
+	@classmethod
+	def recproto_from_proto(cls, initDef, featDims=(10,64,112,112),
+								lossType = 'l2', recLayer='conv1', lossWeight=1.0,
+							  **kwargs):
+		netDef = cls.deploy_from_proto(initDef, **kwargs) 
+		#Add the Memory data layer for inputting the current image
+		lDef = get_layerdef_for_proto('MemoryData', 'gt_feat', None, top='gt_feat',
+						ipDims=featDims) 	
+
+		netDef.del_all_layers_above(recLayer)	
+		#Add the memory data layer	
+		recLayers = co.OrderedDict()
+		for ph in ProtoDef.ProtoPhases:
+			recLayers[ph] = co.OrderedDict()
+			stFlag = False
+			for lName, l in netDef.layers_[ph].iteritems():
+				if stFlag:
+					recLayers[ph]['gt_feat'] = lDef
+					stFlag = False 
+				lType = netDef.get_layer_property(lName, 'type')[1:-1]
+				print lType
+				if ph == 'TRAIN' and lType == 'DeployData':
+					stFlag = True
+				recLayers[ph][lName] = copy.deepcopy(l)
+		#Add the Loss Layer
+		if lossType == 'l1':
+			pass
+		elif lossType == 'l2':
+			lArgs = {}
+			lArgs['bottom']  = recLayer
+			lArgs['bottom2'] = 'gt_feat'
+			lArgs['lossWeight'] = lossWeight 
+			lDef = get_layerdef_for_proto('EuclideanLoss', 'loss', **lArgs)	
+		else:
+			raise Exception ('Loss Type %s not recognized' % lossType)
+		recLayers['TRAIN']['loss'] = lDef
+		netDef.layers_ = copy.deepcopy(recLayers)
 		return netDef
 
 	@classmethod
@@ -990,6 +1052,8 @@ class ProtoDef():
 				deployNet[trPhase][name] = copy.deepcopy(self.layers_[trPhase][name])
 		#Convert the current proto into the deploy proto
 		self.layers_ = copy.deepcopy(deployNet)	
+		print ('TRAIN', self.layers_[trPhase].keys())
+		print ('TEST', self.layers_[tePhase].keys())
 			
 	##
 	# Write the prototxt architecture file
@@ -1525,6 +1589,7 @@ class CaffeExperiment:
 			solverFile    = solverPrefix + '_' + caffeExpName + '.prototxt'
 			defFile       = defPrefix    + '_' + caffeExpName + '.prototxt'
 			defDeployFile = defPrefix    + '_' + caffeExpName + '_deploy.prototxt'
+			defRecFile    = defPrefix    + '_' + caffeExpName + '_reconstruct.prototxt'
 			logFile       = logPrefix + '_' + '%s' + '_' + caffeExpName + '.txt'
 			runFile       = runPrefix + '_' + '%s' + '_' + caffeExpName + '.sh'
 			snapPrefix    = defPrefix + '_' + caffeExpName 
@@ -1532,6 +1597,7 @@ class CaffeExperiment:
 			solverFile    = caffeExpName + '_' + solverPrefix + '.prototxt'
 			defFile       = caffeExpName + '_' + defPrefix    + '.prototxt'
 			defDeployFile = caffeExpName + '_' + defPrefix    + '_deploy.prototxt'
+			defRecFile    = caffeExpName + '_' + defPrefix    + '_reconstruct.prototxt'
 			logFile       = caffeExpName + '_' + '%s' + '_' + logPrefix + '.txt'
 			runFile       = caffeExpName + '_' + '%s' + '_' + logPrefix + '.sh'
 			snapPrefix    = caffeExpName + '_' + defPrefix 
@@ -1540,6 +1606,7 @@ class CaffeExperiment:
 		self.files_['solver'] = os.path.join(self.dirs_['exp'], solverFile) 
 		self.files_['netdef'] = os.path.join(self.dirs_['exp'], defFile)
 		self.files_['netdefDeploy'] = os.path.join(self.dirs_['exp'], defDeployFile) 
+		self.files_['netdefRec']    = os.path.join(self.dirs_['exp'], defRecFile) 
 		self.files_['logTrain'] = os.path.join(self.dirs_['exp'], logFile % 'train')
 		self.files_['logTest']  = os.path.join(self.dirs_['exp'], logFile % 'test')
 		self.files_['runTrain'] = os.path.join(self.dirs_['exp'], runFile % 'train')
@@ -1697,8 +1764,9 @@ class CaffeTest:
 	# to be used for testing
 	@classmethod
 	def from_caffe_exp_lmdb(cls, caffeExp, lmdbTest, doubleDb=False, deviceId=0):
-		self      = cls()
-		self.exp_ = caffeExp
+		self         = cls()
+		self.exp_    = copy.deepcopy(caffeExp)
+		self.netdef_ = copy.deepcopy(caffeExp.expFile_.netDef_)
 		self.db_  = mpio.DbReader(lmdbTest)
 		self.device_ = deviceId
 		self.ipMode_    = 'lmdb'
@@ -1707,10 +1775,25 @@ class CaffeTest:
 	
 	@classmethod
 	def from_caffe_exp(cls, caffeExp, deviceId=0):
-		self      = cls()
-		self.exp_ = caffeExp
+		self         = cls()
+		self.exp_    = copy.deepcopy(caffeExp)
+		self.netdef_ = copy.deepcopy(caffeExp.expFile_.netDef_)
 		self.device_ = deviceId
-		self.ipMode_    = None
+		self.ipMode_ = None
+		return self
+
+	@classmethod
+	def from_model(cls, defFile, modelFile, deviceId=0):
+		self      = cls()
+		self.exp_ = None	
+		self.netdef_   = ProtoDef(defFile)
+		if type(defFile) == str:
+			self.defFile_  = defFile
+		else:
+			self.defFile_  = 'tmp_reconstruct.prototxt'
+		self.model_    = modelFile		
+		self.device_   = deviceId
+		self.ipMode_   = None
 		return self
 
 	##
@@ -1721,7 +1804,7 @@ class CaffeTest:
 						 batchSz=100, delLayers=['accuracy', 'loss'],
 						 maxClassCount=None, maxLabel=None, meanFile=None,
 						 delAbove=None, isAccuracyTest=True,
-						 chSwap=None):
+						 chSwap=None, testMode=True):
 		'''
 			This will simply store the gt and predicted labels
 			opName         : The layer from which the predicted features need to be taken.
@@ -1737,36 +1820,47 @@ class CaffeTest:
 		'''
 		if not isinstance(opNames, list):
 			opNames = [opNames]
-		assert len(dataLayerNames)==1
+		assert dataLayerNames is None or len(dataLayerNames)==1
 		if newDataLayerNames is not None:
 			assert len(dataLayerNames)==len(newDataLayerNames)
 	
 		#Get the meanFile is present
 		if meanFile is None:
-			meanFile = self.exp_.get_layer_property(dataLayerNames[0], 'mean_file')
+			meanFile = self.netdef_.get_layer_property(dataLayerNames[0], 'mean_file')
 			if meanFile is not None:
 				meanFile = meanFile[1:-1]
 				print 'Using mean file: %s' % meanFile
 			else:
 				print 'No mean file found'
 		#Get Scale if present
-		scale    = self.exp_.get_layer_property(dataLayerNames[0], 'scale')
-		if scale is not None:
-			scale = float(scale)
-			print 'Setting scale as :%f' % scale
+		#scale    = self.exp_.get_layer_property(dataLayerNames[0], 'scale')
+		print ('AS A HACK - SCALE IS BEING IGNORED .. CORRECT IT SOON')
+		'''
+		if dataLayerNames is not None:
+			scale    = self.netdef_.get_layer_property(dataLayerNames[0], 'scale')
+			if scale is not None:
+				scale = float(scale)
+				print 'Setting scale as :%f' % scale
+			else:
+				scale = None
 		else:
 			scale = None
-
-		#Make the deploy file
-		self.exp_.make_deploy(dataLayerNames = dataLayerNames, imSz = [[channels, cropH, cropW]], 
-								batchSz = batchSz, delLayers = delLayers, delAbove=delAbove,
-								newDataLayerNames=newDataLayerNames)
-		self.netdef_ = self.exp_.get_deploy_file()
-		#Name of the model
-		self.model_  = self.exp_.get_snapshot_name(numIter=modelIterations)
+		'''
+		scale = None
+		if self.exp_ is not None:
+			#Make the deploy file
+			self.exp_.make_deploy(dataLayerNames = dataLayerNames, 
+									imSz = [[channels, cropH, cropW]], 
+									batchSz = batchSz, delLayers = delLayers, delAbove=delAbove,
+									newDataLayerNames=newDataLayerNames)
+			self.netdef_ = self.exp_.get_deploy_file()
+			#Name of the model
+			self.model_  = self.exp_.get_snapshot_name(numIter=modelIterations)
+		else:
+			self.netdef_ = self.defFile_
 		#Setup the network
 		self.net_    = mp.MyNet(self.netdef_, self.model_, deviceId=self.device_,
-											testMode=True)
+											testMode=testMode)
 		if newDataLayerNames is not None:
 			dataLayerNames = newDataLayerNames
 
@@ -1778,6 +1872,7 @@ class CaffeTest:
 			if chSwap is None:
 				chSwap       = (2,1,0) 
 
+		#print (type(self.net_))
 		self.net_.set_preprocess(ipName = dataLayerNames[0], isBlobFormat=isBlobFormat,
 										imageDims = (imH, imW, channels),
 										cropDims  = (cropH, cropW), chSwap=chSwap,

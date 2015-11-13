@@ -10,6 +10,7 @@ import os
 import caffe
 import pdb
 import my_pycaffe as mp
+import scipy
 
 TMP_DATA_DIR = '/data1/pulkitag/others/caffe_tmp_data/'
 
@@ -80,3 +81,77 @@ def vis_generic_window_data(protoDef, numLabels, layerName='window_data', phase=
 			plot_pairs(im1, im2, figDt, lbStr) 
 			raw_input()
 
+
+def rec_fun_grad(x, myNet, blobDat, blobLbl, shp, lamda):
+	'''
+		Consider one batch a time. 
+	'''
+	#print x.shape, blobDat.shape, blobLbl.shape, lamda
+	#Put the data
+	myNet.net_.net.set_input_arrays(blobDat, blobLbl)
+	print shp
+	#Get the Error
+	feats, diffs = myNet.net_.forward_backward_all(blobs=['loss'],
+									 diffs=['data'],data=x.reshape(shp))
+	grad         = diffs['data'] + lamda * x.reshape(shp)
+	batchLoss    = feats['loss'][0] + 0.5 * lamda * np.dot(x,x)
+
+	grad = grad.flatten()
+	return batchLoss, grad
+
+
+def reconstruct_optimal_input(exp, modelIter, im, recLayer='conv1', 
+								imH=101, imW=101, cropH=101, cropW=101, channels=3,
+								meanFile=None, lamda=1e-8, batchSz=1, **kwargs):
+	exp = copy.deepcopy(exp)	
+	kwargs['delAbove'] = recLayer
+
+	#Setup the original network	
+	origNet = mpu.CaffeTest.from_caffe_exp(exp)
+	origNet.setup_network(opNames=recLayer, imH=imH, imW=imW, cropH=cropH, cropW=cropW,
+								modelIterations=modelIter, batchSz=batchSz,
+								isAccuracyTest=False, meanFile=meanFile, **kwargs)
+
+	#Get the size of the features in the layer that needs to be reconstructed
+	#Shape of the layer to be reconstructed
+	blob = origNet.net_.net.blobs[recLayer]
+	initBlobDat = np.zeros((blob.num, blob.channels, blob.height, blob.width)).astype('float32')
+	blobLbl  = np.zeros((blob.num, 1, 1, 1)).astype('float32')
+	recShape = (blob.num, blob.channels, blob.height, blob.width) 
+
+	#Get the initial layer features
+	print "Extracting Initial Features"
+	blobDat = np.zeros((blob.num, blob.channels, blob.height, blob.width)).astype('float32')
+	if im.ndim == 3:
+		imIp    = im.reshape((batchSz,) + im.shape)
+	else:
+		imIp = im	
+	feats   = origNet.net_.forward_all(blobs=[recLayer], data=imIp)
+	blobDat = feats[recLayer]
+	#imDat   = np.asarray(imDat)
+
+	#Get the net for reconstruvtions
+	#print (exp.expFile_.netDef_.get_all_layernames())
+	recProto = mpu.ProtoDef.recproto_from_proto(exp.expFile_.netDef_, featDims=recShape,
+								imSz=[[channels, cropH, cropW]], batchSz=batchSz, **kwargs)
+	recProto.write(exp.files_['netdefRec'])
+	recModel = exp.get_snapshot_name(modelIter)
+	recNet   = edict()
+	recNet.net_ = mp.MyNet(exp.files_['netdefRec'], recModel, caffe.TRAIN)
+	#recNet   = mpu.CaffeTest.from_model(exp.files_['netdefRec'], recModel)		
+	#kwargs['dataLayerNames'] = ['data']
+	#kwargs['newDataLayerNames'] = None
+	#recNet.setup_network(opNames=[recLayer], imH=imH, imW=imW, cropH=cropH, cropW=cropW,
+	#				 modelIterations=modelIter, isAccuracyTest=False, meanFile=meanFile,
+	#				 testMode=False, **kwargs)
+	recNet.net_.net.set_force_backward(recLayer)
+	#Start the reconstruction
+	ch,h,w = imIp.shape[3], imIp.shape[1], imIp.shape[2]
+	imRec  = 255*np.random.random((batchSz,ch,h,w)).astype('float32')
+	print imRec.shape, blobDat.shape, blobLbl.shape
+	sol = scipy.optimize.fmin_l_bfgs_b(rec_fun_grad, imRec.flatten(),args=[recNet, blobDat, blobLbl, imRec.shape, lamda], maxfun=1000, factr=1e+7,pgtol=1e-07, iprint=0, disp=1)
+
+	imRec = np.reshape(sol[0],((batchSz,ch,h,w)))
+	#imRec = im2visim(np.copy(imRec))
+	#imGt  = im2visim(np.copy(imDat))
+	return imRec, imGt	
