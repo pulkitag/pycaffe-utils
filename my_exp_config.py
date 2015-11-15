@@ -3,10 +3,11 @@ import numpy as np
 import my_pycaffe_utils as mpu
 from easydict import EasyDict as edict
 import copy
+import other_utils as ou
 
 ##
 # Parameters required to specify the n/w architecture
-def get_nw_prms(**kwargs):
+def get_nw_prms(isHashStr=False, **kwargs):
 	dArgs = edict()
 	dArgs.netName     = 'alexnet'
 	dArgs.concatLayer = 'fc6'
@@ -14,7 +15,7 @@ def get_nw_prms(**kwargs):
 	dArgs.contextPad  = 0
 	dArgs.imSz        = 227
 	dArgs.imgntMean   = True
-	dArgs.maxJitter   = 11
+	dArgs.maxJitter   = 0
 	dArgs.randCrop    = False
 	dArgs.lossWeight  = 1.0
 	dArgs.multiLossProto   = None
@@ -64,12 +65,15 @@ def get_nw_prms(**kwargs):
 		expStr = '%s_extraFc%d' % (expStr, dArgs.extraFc)
 	if dArgs.lrAbove is not None:
 		expStr = '%s_lrAbove-%s' % (expStr, dArgs.lrAbove)
-	dArgs.expStr = expStr 
+	if not isHashStr:
+		dArgs.expStr = expStr 
+	else:
+		dArgs.expStr = 'nwPrms-%s' % ou.hash_dict_str(dArgs)
 	return dArgs 
 
 ##
 # Parameters that specify the learning
-def get_lr_prms(**kwargs):	
+def get_lr_prms(isHashStr=False, **kwargs):	
 	dArgs = edict()
 	dArgs.batchsize = 128
 	dArgs.stepsize  = 20000	
@@ -87,23 +91,27 @@ def get_lr_prms(**kwargs):
 	solArgs = edict({'test_iter': 100, 'test_interval': 1000,
 						 'snapshot': 2000, 
 							'debug_info': debugStr})
-	print dArgs.keys()
-	for k in dArgs.keys():
-		if k in ['batchsize']:
-			continue
-		solArgs[k] = copy.deepcopy(dArgs[k])
-	dArgs.solver = mpu.make_solver(**solArgs)	
+	#print dArgs.keys()
 	expStr = 'batchSz%d_stepSz%.0e_blr%.5f_mxItr%.1e_gamma%.2f_wdecay%.6f'\
 					 % (dArgs.batchsize, dArgs.stepsize, dArgs.base_lr,
 							dArgs.max_iter, dArgs.gamma, dArgs.weight_decay)
 	if not(dArgs.clip_gradients==-1):
 		expStr = '%s_gradClip%.1f' % (expStr, dArgs.clip_gradients)
-	dArgs.expStr = expStr
+	if not isHashStr:
+		dArgs.expStr = expStr 
+	else:
+		dArgs.expStr = 'lrPrms-%s' % ou.hash_dict_str(dArgs)
+	for k in dArgs.keys():
+		if k in ['batchsize', 'expStr']:
+			continue
+		solArgs[k] = copy.deepcopy(dArgs[k])
+
+	dArgs.solver = mpu.make_solver(**solArgs)	
 	return dArgs 
 
 ##
 # Parameters for fine-tuning
-def get_finetune_prms(**kwargs):
+def get_finetune_prms(isHashStr=False, **kwargs):
 	'''
 		sourceModelIter: The number of model iterations of the source model to consider
 		fine_max_iter  : The maximum iterations to which the target model should be trained.
@@ -146,11 +154,22 @@ def get_caffe_prms(nwPrms, lrPrms, finePrms=None,
 	caffePrms['solver'] = lrPrms.solver
 	return caffePrms
 
-
 def get_default_caffe_prms(deviceId=1):
 	nwPrms = get_nw_prms()
 	lrPrms = get_lr_prms()
 	cPrms  = get_caffe_prms(nwPrms, lrPrms, deviceId=deviceId)
 	return cPrms
+
+def get_experiment_object(prms, cPrms):
+	#Legacy support
+	if prms['paths'].has_key('exp'):
+		expDir = prms.paths.exp.dr
+	else:
+		expDir = prms['paths']['expDir']
+	caffeExp = mpu.CaffeExperiment(prms['expName'], cPrms['expStr'], 
+							expDir, prms.paths.exp.snapshot.dr,
+						  deviceId=cPrms['deviceId'])
+	return caffeExp
+
 
 
