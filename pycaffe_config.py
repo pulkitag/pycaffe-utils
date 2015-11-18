@@ -14,6 +14,8 @@ if cfg.HOSTNAME in ['anakin', 'vader', 'spock', 'poseidon']:
 	cfg.STREETVIEW_CODE_PATH = '/work4/pulkitag-code/code/projStreetView'
 	cfg.STREETVIEW_DATA_MAIN = '/data0'
 	cfg.STREETVIEW_DATA_READ_IM = cfg.STREETVIEW_DATA_MAIN
+	#Billiards Path
+	cfg.BILLIARDS_DATA_MAIN = '/data1'
 else:
 	cfg.IS_EC2 = True
 	if osp.exists('/home-2/pagrawal'):
@@ -26,6 +28,10 @@ else:
 	if osp.exists('/data0'):
 		cfg.STREETVIEW_DATA_MAIN    = '/data0'
 		cfg.STREETVIEW_DATA_READ_IM = cfg.STREETVIEW_DATA_MAIN
+		#BILLIARDS PATH
+		cfg.BILLIARDS_DATA_MAIN = '/data1'
 	else:
 		cfg.STREETVIEW_DATA_MAIN    = '/puresan/shared'
 		cfg.STREETVIEW_DATA_READ_IM = '/dev/shm'
+		#BILLIARDA PATH
+		cfg.BILLIARDS_DATA_MAIN = '/puresan/shared'

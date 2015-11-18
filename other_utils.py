@@ -6,6 +6,7 @@ import scipy.misc as scm
 import matplotlib.pyplot as plt
 import copy
 import os
+from os import path as osp
 import collections as co
 import pdb
 from easydict import EasyDict as edict
@@ -332,3 +333,29 @@ def chunk_filename(fName, maxLen=255):
 	dirName = os.path.dirname(newName)
 	create_dir(dirName)
 	return newName	
+
+##
+# Hash a dictonary into string
+def hash_dict_str(d):
+	d     = copy.deepcopy(d)
+	oKeys = []
+	for k,v in d.iteritems():
+		if type(v) in [bool, int, float, str, type(None)]:
+			continue
+		else:
+			assert type(v) in [dict, edict, co.OrderedDict],\
+				 'Type not recognized %s, for this type different results for different runs of\
+					hashing can be obtained, therefore the exception' % v	
+			oKeys.append(k)
+	hStr = []
+	for k in oKeys:
+		hStr.append('-%s' % hash_dict_Str({k: d[k]}))
+		del d[k]
+	hStr = ''.join('%s' % s for s in hStr)
+	return '%d%s' % (hash(frozenset(d.items())), hStr)
+
+##
+#
+def mkdir(fName):
+	if not osp.exists(fName):
+		os.makedirs(fName)

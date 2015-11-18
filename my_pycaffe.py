@@ -335,6 +335,7 @@ class MyNet:
 
 		if chSwap is not None:
 			#Required for eg RGB to BGR conversion.
+			print (ipName, chSwap)
 			self.transformer[ipName].set_channel_swap(ipName, chSwap)
 	
 		if rawScale is not None:
@@ -412,6 +413,7 @@ class MyNet:
 			if h==self.imageDims[0] and w==self.imageDims[1]:
 				im_[ix] = np.copy(in_)
 			else:
+				#print (in_.shape, self.imageDims)
 				im_[ix] = caffe.io.resize_image(in_, self.imageDims[0:2])
 
 		#Required cropping
@@ -474,7 +476,7 @@ class MyNet:
 				elif runType == 'backward':
 					ops = self.net.backward(diff=diff, **procData)
 				elif runType == 'forward_backward_all':
-					ops, opDiff = self.net_forward_backward_all(blobs=blobs, diffs=diffs, **procData)
+					ops, opDiff = self.net.forward_backward_all(blobs=blobs, diffs=diffs, **procData)
 					#Resize diffs in the right size
 					for opd_, data in ops.iteritems():
 						opDiff[opd_] = data[0:N]
