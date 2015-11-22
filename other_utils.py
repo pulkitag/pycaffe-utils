@@ -359,3 +359,19 @@ def hash_dict_str(d):
 def mkdir(fName):
 	if not osp.exists(fName):
 		os.makedirs(fName)
+
+##
+#Make parameter string for python layers
+def make_python_param_str(params, ignoreKeys=['expStr']):
+	paramStr = ''
+	for k,v in params:
+		if k in ignoreKeys:
+			continue
+		if type(v) == bool:
+			if v:
+				paramStr = paramStr + ' --%s' % k
+			else:
+				paramStr = paramStr + ' --no-%s' % k
+		else:
+			paramStr = paramStr + ' --%s %s' % (k,v)
+	return paramStr

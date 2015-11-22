@@ -527,7 +527,7 @@ class MyNet:
 
 
 	def vis_weights(self, blobName, blobNum=0, ax=None, titleName=None, isFc=False,
-						 h=None, w=None, returnData=False): 
+						 h=None, w=None, returnData=False, chSt=0, chEn=3): 
 		assert blobName in self.net.blobs, 'BlobName not found'
 		dat  = copy.deepcopy(self.net.params[blobName][blobNum].data)
 		if isFc:
@@ -542,7 +542,8 @@ class MyNet:
 			weights = vis_square(dat, ax=ax, titleName=titleName, returnData=returnData)	
 		else:
 			if h is None and w is None:
-				weights = vis_square(dat.transpose(0,2,3,1), ax=ax, titleName=titleName, returnData=returnData)	
+				weights = vis_square(dat.transpose(0,2,3,1), ax=ax, titleName=titleName,
+									 returnData=returnData, chSt=chSt, chEn=chEn)	
 			else:
 				weights = vis_rect(dat.transpose(0,2,3,1), h, w, ax=ax, titleName=titleName, returnData=returnData)	
 
@@ -625,10 +626,14 @@ class MySolver:
 
 ##
 # Visualize filters
-def vis_square(data, padsize=1, padval=0, ax=None, titleName=None, returnData=False):
+def vis_square(data, padsize=1, padval=0, ax=None, titleName=None, returnData=False,
+							chSt=0, chEn=3):
 	'''
 		data is numFitlers * height * width or numFilters * height * width * channels
 	'''
+	if data.ndim == 4:
+		data = data[:,:,:,chSt:chEn]
+
 	data -= data.min()
 	data /= data.max()
 
