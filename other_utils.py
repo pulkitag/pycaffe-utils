@@ -12,18 +12,27 @@ import pdb
 from easydict import EasyDict as edict
 ##
 # Verify if all the keys are present recursively in the dict
-def verify_recursive_key(data, keyNames):
+def verify_recursive_key(data, keyNames, verifyOnly=False):
 	'''
 		data    : dict like data['a']['b']['c']...['l']
 		keyNames: list of keys 
+		verifyOnly: if TRUE then dont raise exceptions - just return the truth value
 	'''
 	assert isinstance(keyNames, list), 'keyNames is required to be a list'
 	#print data, keyNames
-	assert data.has_key(keyNames[0]), '%s not present' % keyNames[0]
+	if verifyOnly:
+		if not data.has_key(keyNames[0]):
+			return False
+	else:
+		assert data.has_key(keyNames[0]), '%s not present' % keyNames[0]
 	for i in range(1,len(keyNames)):
 		dat = reduce(lambda dat, key: dat[key], keyNames[0:i], data)
 		assert isinstance(dat, dict), 'Wrong Keys'
-		assert dat.has_key(keyNames[i]), '%s key not present' % keyNames[i]
+		if verifyOnly:
+			if not dat.has_key(keyNames[i]):
+				return False
+		else:
+			assert dat.has_key(keyNames[i]), '%s key not present' % keyNames[i]
 	return True
 
 ##
@@ -34,6 +43,14 @@ def set_recursive_key(data, keyNames, val):
 		dat[keyNames[-1]] = val
 	else:
 		raise Exception('Keys not present')
+
+
+def add_recursive_key(data, keyNames, val):
+	#isKey = verify_recursive_key(data, keyNames)
+	#assert not isKey, 'key is already present'
+	dat = reduce(lambda dat, key: dat[key], keyNames[:-1], data)
+	dat[keyNames[-1]] = val
+
 
 ##
 # Delete the recursive key
@@ -48,8 +65,8 @@ def del_recursive_key(data, keyNames):
 
 ##
 # Get the item from a recursive key
-def get_item_recursive_key(data, keyNames):
-	if verify_recursive_key(data, keyNames):
+def get_item_recursive_key(data, keyNames, verifyOnly=False):
+	if verify_recursive_key(data, keyNames, verifyOnly=verifyOnly):
 		dat = reduce(lambda dat, key: dat[key], keyNames[:-1], data)
 		return dat[keyNames[-1]]
 	else:

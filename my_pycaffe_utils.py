@@ -1243,6 +1243,27 @@ class ProtoDef():
 		#Set the value
 		ou.del_recursive_key(self.layers_[phase][layerName], propName)
 
+	##
+	def add_layer_property(self, layerName, propName,propVal, phase='TRAIN', propNum=0):
+		'''
+			propVal: Value of the property
+		'''
+		assert phase in ProtoDef.ProtoPhases, 'phase name not recognized'
+		assert layerName in self.layers_[phase].keys(), '%s layer not found' % layerName
+		if not isinstance(propName, list):
+			#Modify the propName to account for duplicates
+			propName = propName + '_$dup$' * propNum
+			propName = [propName]
+		else:
+			if isinstance(propNum, list):
+				assert len(propNum)==len(propName), 'Lengths mismatch'
+				propName = [p + i * '_$dup$' for (p,i) in zip(propName, propNum)]
+			else:
+				assert propNum==0,'propNum is not appropriately specified'
+		keyPath = ou.get_item_recursive_key(self.layers_[phase][layerName],
+																	 propName, verifyOnly=True)
+		assert keyPath is None, '%s already exists' % propName
+		ou.add_recursive_key(self.layers_[phase][layerName], propName, propVal)	
 
 	##
 	#Get layer from name
