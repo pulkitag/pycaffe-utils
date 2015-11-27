@@ -359,11 +359,20 @@ class MyNet:
 	
 		#Mean Subtraction
 		if not meanDat is None:
+			isTuple = False
 			if isinstance(meanDat, string_types):
 				meanDat = read_mean(meanDat)
+			elif type(meanDat) ==  tuple:
+				meanDat = np.array(meanDat).reshape(3,1,1)
+				meanDat = meanDat * (np.ones((3, self.crop[2] - self.crop[0],\
+									 self.crop[3]-self.crop[1])).astype(np.float32))
+				isTuple = True
 			_,h,w = meanDat.shape
-			assert self.imageDims[0]<=h and self.imageDims[1]<=w, 'imageDims must match mean Image size, (h,w), (imH, imW): (%d, %d), (%d,%d)' % (h,w,self.imageDims[0],self.imageDims[1])
-			meanDat  = meanDat[:, self.crop[0]:self.crop[2], self.crop[1]:self.crop[3]] 
+			assert self.imageDims[0]<=h and self.imageDims[1]<=w,\
+				 'imageDims must match mean Image size, (h,w), (imH, imW): (%d, %d), (%d,%d)'\
+				 % (h,w,self.imageDims[0],self.imageDims[1])
+			if not isTuple:
+				meanDat  = meanDat[:, self.crop[0]:self.crop[2], self.crop[1]:self.crop[3]] 
 			self.transformer[ipName].set_mean(ipName, meanDat)
 	
 	

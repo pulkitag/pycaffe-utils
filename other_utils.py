@@ -381,7 +381,7 @@ def mkdir(fName):
 #Make parameter string for python layers
 def make_python_param_str(params, ignoreKeys=['expStr']):
 	paramStr = ''
-	for k,v in params:
+	for k,v in params.iteritems():
 		if k in ignoreKeys:
 			continue
 		if type(v) == bool:
