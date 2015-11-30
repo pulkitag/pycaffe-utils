@@ -1074,7 +1074,7 @@ class ProtoDef():
 				if key in self.layers_['TRAIN'].keys():
 					continue
 				else:
-					write_proto_param_layer(fid, self.layers_['TEST'][key], numTabs=0)
+					write_proto_param_layer(fid, self.layers_['TEST'][key])
 
 	##
 	# Find the layers that have learning rates
@@ -1514,6 +1514,7 @@ class ExperimentFiles:
 		else:
 			self.solDef_ = SolverDef.from_file(inFile)
 		self.solDef_.add_property('device_id', self.deviceId_)
+		#print (self.solDef_.data_)
 		#Modify the name of the net
 		self.solDef_.set_property('net', '"%s"' % self.def_)		
 

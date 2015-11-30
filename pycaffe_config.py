@@ -16,6 +16,8 @@ if cfg.HOSTNAME in ['anakin', 'vader', 'spock', 'poseidon']:
 	cfg.STREETVIEW_DATA_READ_IM = cfg.STREETVIEW_DATA_MAIN
 	#Billiards Path
 	cfg.BILLIARDS_DATA_MAIN = '/data1'
+	#Caffe Model Path
+	cfg.CAFFE_MODEL_PATH = '/data1/pulkitag/caffe_models/'
 else:
 	cfg.IS_EC2 = True
 	if osp.exists('/home-2/pagrawal'):
