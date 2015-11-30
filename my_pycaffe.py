@@ -359,11 +359,20 @@ class MyNet:
 	
 		#Mean Subtraction
 		if not meanDat is None:
+			isTuple = False
 			if isinstance(meanDat, string_types):
 				meanDat = read_mean(meanDat)
+			elif type(meanDat) ==  tuple:
+				meanDat = np.array(meanDat).reshape(3,1,1)
+				meanDat = meanDat * (np.ones((3, self.crop[2] - self.crop[0],\
+									 self.crop[3]-self.crop[1])).astype(np.float32))
+				isTuple = True
 			_,h,w = meanDat.shape
-			assert self.imageDims[0]<=h and self.imageDims[1]<=w, 'imageDims must match mean Image size, (h,w), (imH, imW): (%d, %d), (%d,%d)' % (h,w,self.imageDims[0],self.imageDims[1])
-			meanDat  = meanDat[:, self.crop[0]:self.crop[2], self.crop[1]:self.crop[3]] 
+			assert self.imageDims[0]<=h and self.imageDims[1]<=w,\
+				 'imageDims must match mean Image size, (h,w), (imH, imW): (%d, %d), (%d,%d)'\
+				 % (h,w,self.imageDims[0],self.imageDims[1])
+			if not isTuple:
+				meanDat  = meanDat[:, self.crop[0]:self.crop[2], self.crop[1]:self.crop[3]] 
 			self.transformer[ipName].set_mean(ipName, meanDat)
 	
 	
@@ -527,7 +536,7 @@ class MyNet:
 
 
 	def vis_weights(self, blobName, blobNum=0, ax=None, titleName=None, isFc=False,
-						 h=None, w=None, returnData=False): 
+						 h=None, w=None, returnData=False, chSt=0, chEn=3): 
 		assert blobName in self.net.blobs, 'BlobName not found'
 		dat  = copy.deepcopy(self.net.params[blobName][blobNum].data)
 		if isFc:
@@ -542,7 +551,8 @@ class MyNet:
 			weights = vis_square(dat, ax=ax, titleName=titleName, returnData=returnData)	
 		else:
 			if h is None and w is None:
-				weights = vis_square(dat.transpose(0,2,3,1), ax=ax, titleName=titleName, returnData=returnData)	
+				weights = vis_square(dat.transpose(0,2,3,1), ax=ax, titleName=titleName,
+									 returnData=returnData, chSt=chSt, chEn=chEn)	
 			else:
 				weights = vis_rect(dat.transpose(0,2,3,1), h, w, ax=ax, titleName=titleName, returnData=returnData)	
 
@@ -625,10 +635,14 @@ class MySolver:
 
 ##
 # Visualize filters
-def vis_square(data, padsize=1, padval=0, ax=None, titleName=None, returnData=False):
+def vis_square(data, padsize=1, padval=0, ax=None, titleName=None, returnData=False,
+							chSt=0, chEn=3):
 	'''
 		data is numFitlers * height * width or numFilters * height * width * channels
 	'''
+	if data.ndim == 4:
+		data = data[:,:,:,chSt:chEn]
+
 	data -= data.min()
 	data /= data.max()
 

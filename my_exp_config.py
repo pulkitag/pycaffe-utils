@@ -5,6 +5,28 @@ from easydict import EasyDict as edict
 import copy
 import other_utils as ou
 
+
+class NetPrms():
+	def __init__(self, dataPrms=edict(), otherPrms=edict(),
+					nwPrms=edict(), preProcPrms=edict()):
+		#The parameters on which the data depends
+		self.dataPrms  = dataPrms
+		#The parameters which control the learning (not the neural net hyperparameters
+		#but they also go in the data layer)
+		self.otherPrms = otherPrms
+		#Parameters that define the net architecture
+		self.nwPrms    = nwPrms
+		#Parametes that define data preprocessing in the net
+		self.preProcPrms = preProcPrms
+		self.expStr      = self.generate_hash()
+	
+	def generate_hash(self):
+		expStr = '%s' % ou.hash_dict_str(self.dataPrms)
+		expStr = expStr + '-%s' % ou.hash_dict_str(self.otherPrms)
+		expStr = expStr + '-%s' % ou.hash_dict_str(self.nwPrms)
+		expStr = expStr + '-%s' % ou.hash_dict_str(self.preProcPrms)
+		self.expStr = expStr
+
 ##
 # Parameters required to specify the n/w architecture
 def get_nw_prms(isHashStr=False, **kwargs):

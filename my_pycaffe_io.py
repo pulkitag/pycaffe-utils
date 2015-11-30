@@ -403,12 +403,22 @@ class GenericWindowWriter:
 		dirName = os.path.dirname(fileName)
 		if len(dirName) >0 and not os.path.exists(dirName):
 			os.makedirs(dirName)
+		self.initWrite_ = False
+		
+		#If image and labels are being stacked
+		self.imStack_ = []
+		self.lbStack_ = []
 
+	#Start writing
+	def init_write(self):
+		if self.initWrite_:
+			return
 		self.fid_ = open(self.file_, 'w')	
 		self.fid_.write('# GenericDataLayer\n')
 		self.fid_.write('%d\n' % self.num_) #Num Examples. 
 		self.fid_.write('%d\n' % self.numIm_) #Num Images per Example. 
 		self.fid_.write('%d\n' % self.lblSz_) #Num	Labels
+		self.initWrite_ = True
 
 	##
 	# Private Helper function for writing the images for the WindowFile
@@ -428,7 +438,12 @@ class GenericWindowWriter:
 
 	##
 	def write(self, lbl, *args):
-		assert len(args)==self.numIm_, 'Wrong input arguments: (%d v/s %d)' % (len(args),self.numIm_)
+		assert len(args)==self.numIm_,\
+			 'Wrong input arguments: (%d v/s %d)' % (len(args),self.numIm_)
+		#Make sure the writing has been intialized
+		if not self.initWrite_:
+			self.init_write()
+		#Start writing the current stuff
 		self.fid_.write('# %d\n' % self.count_)
 		#Write the images
 		for arg in args:
@@ -437,6 +452,7 @@ class GenericWindowWriter:
 				#and the last character in the str is \n
 				self.fid_.write(arg)
 			else:
+				#print (len(arg), arg)
 				imName, imSz, bbox = arg
 				self.write_image_line_(imName, imSz, bbox)	
 		
@@ -448,7 +464,35 @@ class GenericWindowWriter:
 		self.count_ += 1
 
 		if self.count_ == self.num_:
-			self.close()	
+			self.close()
+
+	##
+	#Instead of writing, just stack
+	def push_to_stack(self, lbl, *args):
+		assert len(args)==self.numIm_,\
+			 'Wrong input arguments: (%d v/s %d)' % (len(args),self.numIm_)
+		self.imStack_.append(args)
+		self.lbStack_.append(lbl)
+
+	##
+	#Write the stack
+	def write_stack(self, rndState=None, rndSeed=None):
+		if rndSeed is not None:
+			rndState = np.random.RandomState(rndSeed)
+		N = len(self.imStack_)
+		assert N == len(self.lbStack_)
+
+		if rndState is None:
+			perm = range(N)
+		else:
+			perm = rndState.permutation(N)
+		ims    = [self.imStack_[p] for p in perm]
+		lbs    = [self.lbStack_[p] for p in perm]
+		self.num_ = N
+		for n in range(N):
+			self.write(lbs[n], *(ims[n][0]))
+		self.close()			
+	
 	##
 	def close(self):
 		self.fid_.close()

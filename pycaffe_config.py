@@ -18,6 +18,8 @@ if cfg.HOSTNAME in ['anakin', 'vader', 'spock', 'poseidon']:
 	cfg.BILLIARDS_DATA_MAIN = '/data1'
 	cfg.DATA0 = '/data0'
 	cfg.DATA1 = '/data1'
+	#Caffe Model Path
+	cfg.CAFFE_MODEL_PATH = '/data1/pulkitag/caffe_models/'
 else:
 	cfg.IS_EC2 = True
 	if osp.exists('/home-2/pagrawal'):
