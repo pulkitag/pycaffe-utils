@@ -415,7 +415,10 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 			layerDef[bottom2] = '"%s"' % kwargs['bottom2']
 		layerDef['concat_param'] = co.OrderedDict()
 		layerDef['concat_param']['concat_dim'] = kwargs['concat_dim']
-		layerDef['top']   = '"%s"' % layerName
+		if kwargs.has_key('top'):
+			layerDef['top']   = '"%s"' % kwargs['top']
+		else:
+			layerDef['top']   = '"%s"' % layerName
 
 	elif layerType in ['DeployData']:
 		layerDef['input'] = '"%s"' % layerName

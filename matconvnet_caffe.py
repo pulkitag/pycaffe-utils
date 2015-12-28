@@ -3,6 +3,7 @@ import numpy as np
 import other_utils as ou
 import my_pycaffe_utils as mpu
 import caffe
+import collections as co
 
 class MatConvNetModel:
 	def __init__(self, inFile):
@@ -73,7 +74,8 @@ class MatConvNetModel:
 		elif lType == 'Concat':
 			lDef = mpu.get_layerdef_for_proto(lType, name, ipNames[0],
 							**{'bottom2': ipNames[1:],
-								 'concat_dim': 1}) 
+								 'concat_dim': 1, 
+								 'top': opNames[0]}) 
 	
 		elif lType == 'Loss':
 			lossType = ou.ints_to_str(lParam['loss'])
@@ -92,18 +94,33 @@ class MatConvNetModel:
 			lDef = mpu.get_layerdef_for_proto(lType, name, ipNames[0], 
 				**{'top': opNames[0], 
 					 'K': lParam['K'][0][0], 'T': lParam['T'][0][0], 
-					 'sigma': lParam['sigma'][0][0], 'imgSz': lParam['img_size'][0][0]})
+					 'sigma': lParam['sigma'][0][0], 'imgSz': int(lParam['img_size'][0][0])})
 						
 		else:
 			raise Exception('Layer Type %s not recognized, %d' % (lType, lNum))
 		return lDef
 
 	#Convert the model to Caffe
-	def to_caffe(self):
+	def to_caffe(self, ipLayers=[], layerOrder=[]):
+		'''
+			Caffe doesnot support DAGs but MatConvNet does. layerOrder allows some matconvnet 
+			nets to expressed as caffe nets by moving the order of layers so as to allow caffe
+			to read the generated prototxt file. 
+		'''
 		pDef = mpu.ProtoDef()
+		caffeLayers = co.OrderedDict()
 		for lNum in range(len(self.dat_['net']['layers']['name'])):
-			cl = self.make_caffe_layer(lNum)	
-			pDef.add_layer(cl['name'][1:-1], cl)
+			cl = self.make_caffe_layer(lNum)
+			caffeLayers[cl['name'][1:-1]] = cl
+		#Add input layers if needed
+		for ipl in ipLayers:
+			pDef.add_layer(ipl['name'][1:-1], ipl)
+		#Add the ordered layers first
+		for l in layerOrder:
+			pDef.add_layer(l, caffeLayers[l])
+			del caffeLayers[l]
+		for key, cl in caffeLayers.iteritems():
+			pDef.add_layer(key, cl)
 		return pDef		
 
 ##
@@ -117,7 +134,13 @@ def test_convert():
 	fName   = '/work4/pulkitag-code/code/ief/IEF/models/new_models/models/new-model.mat' 	
 	outName = 'try.prototxt'
 	model = MatConvNetModel(fName)
-	pdef  = model.to_caffe()
+	imgLayer = mpu.get_layerdef_for_proto('DeployData', 'image', None, 
+								**{'ipDims': [1, 3, 224, 224]})
+	kpLayer  = mpu.get_layerdef_for_proto('DeployData', 'kp_pos', None, 
+								**{'ipDims': [1, 17, 2, 1]}) 
+	lbLayer  = mpu.get_layerdef_for_proto('DeployData', 'label', None, 
+								**{'ipDims': [1, 16, 2, 1]}) 
+	pdef  = model.to_caffe(ipLayers=[imgLayer, kpLayer, lbLayer], layerOrder=['render1', 'concat1'])
 	pdef.write(outName)
 	net   = caffe.Net(outName, caffe.TEST)
 	
