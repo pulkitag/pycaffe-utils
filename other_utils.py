@@ -392,3 +392,9 @@ def make_python_param_str(params, ignoreKeys=['expStr']):
 		else:
 			paramStr = paramStr + ' --%s %s' % (k,v)
 	return paramStr
+
+##
+#Convert a list of ints into a string
+def ints_to_str(ints):
+	ch = ''.join(str(unichr(i)) for i in ints)
+	return ch

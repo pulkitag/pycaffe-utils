@@ -493,6 +493,9 @@ class MyNet:
 					raise Exception('runType %s not recognized' % runType)
 				#Resize data in the right size
 				for op_, data in ops.iteritems():
+					if data.ndim==0:
+						continue
+					print (op_, data.shape)
 					ops[op_] = data[0:N]
 			else:
 				raise Exception('No Input data specified.')

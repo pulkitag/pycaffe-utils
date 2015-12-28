@@ -16,6 +16,7 @@ import shutil
 import copy
 import h5py as h5
 from pycaffe_config import cfg
+import scipy.misc as scm
 
 CAFFE_PATH = cfg.CAFFE_PATH
 
@@ -146,7 +147,8 @@ class ILSVRC12Reader:
 
 	def read(self):
 		imFile = self.imFile_ % (self.count_ + 1)
-		im     = mp.caffe.io.load_image(imFile)
+		#im     = mp.caffe.io.load_image(imFile)
+		im     = scm.imread(imFile)
 		lb     = self.labels_[self.count_]	
 		syn    = self.synsets_[lb]
 		words  = self.words_[syn]
@@ -294,7 +296,10 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 		layerDef[ipKey]['bias_filler']['value']  = str(1.)
 
 	elif layerType == 'Convolution':
-		layerDef['top']    = '"%s"' % layerName
+		if kwargs.has_key('top'):
+			layerDef['top'] = '"%s"' % kwargs['top']
+		else:
+			layerDef['top']    = '"%s"' % layerName
 		layerDef['param'] = get_proto_dict('param_w', 'param', **kwargs)
 		paramDup = make_key('param', layerDef.keys())
 		layerDef[paramDup] = get_proto_dict('param_b', paramDup, **kwargs)
@@ -334,6 +339,20 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 		layerDef['pooling_param']['pool'] = 'MAX'
 		layerDef['pooling_param']['kernel_size'] = kwargs['kernel_size']
 		layerDef['pooling_param']['stride']      = kwargs['stride']
+		if kwargs.has_key('pad'):
+			layerDef['pooling_param']['pad'] = kwargs['pad']
+	
+	elif layerType == 'LRN':
+		if kwargs.has_key('top'):
+			topName = kwargs['top']
+		else:
+			topName = layerName
+		layerDef['top'] = '"%s"' % topName
+		layerDef['lrn_param'] = {}
+		layerDef['lrn_param']['local_size'] = kwargs['local_size']
+		layerDef['lrn_param']['alpha']      = kwargs['alpha']
+		layerDef['lrn_param']['beta'] = kwargs['beta']
+		layerDef['lrn_param']['k']    = kwargs['k']
 
 	elif layerType=='Silence':
 		#Nothing to be done
@@ -387,8 +406,13 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 	elif layerType == 'Concat':
 		assert kwargs.has_key('bottom2')
 		assert kwargs.has_key('concat_dim')
-		bottom2 = make_key('bottom', layerDef.keys())
-		layerDef[bottom2] = '"%s"' % kwargs['bottom2']
+		if type(kwargs['bottom2'])==list:
+			for bot in kwargs['bottom2']:
+				bottom2 = make_key('bottom', layerDef.keys())
+				layerDef[bottom2] = '"%s"' % bot
+		else:
+			bottom2 = make_key('bottom', layerDef.keys())
+			layerDef[bottom2] = '"%s"' % kwargs['bottom2']
 		layerDef['concat_param'] = co.OrderedDict()
 		layerDef['concat_param']['concat_dim'] = kwargs['concat_dim']
 		layerDef['top']   = '"%s"' % layerName
@@ -428,6 +452,18 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 			layerDef['random_noise_param'] = co.OrderedDict()
 			layerDef['random_noise_param']['adaptive_sigma']  = kwargs['adaptive_sigma']
 			layerDef['random_noise_param']['adaptive_factor'] = kwargs['adaptive_factor'] 		
+
+	elif layerType in ['gaussRender']:
+		if kwargs.has_key('top'):
+			layerDef['top'] = '"%s"' %  kwargs['top']
+		else:
+			layerDef['top']    = '"%s"' % layerName
+		layerDef['type']   = '"Python"'
+		layerDef['python_param'] = co.OrderedDict()
+		layerDef['python_param']['module'] = '"python_ief"'
+		layerDef['python_param']['layer']  = '"GaussRenderLayer"'
+		paramStr = ou.make_python_param_str(kwargs, ignoreKeys=['top'])
+		layerDef['python_param']['param_str'] = '"%s"' % paramStr
 
 	else:
 		raise Exception('%s layer type not found' % layerType)
@@ -843,17 +879,19 @@ class ProtoDef():
 			self.layers_   = co.OrderedDict(layerDict)
 			self.initData_ = []
 			return 
-		#If initializing from a file
+		#Lines that are there before the layers start. 
+		self.initData_ = []
 		self.layers_ = {}
 		self.layers_['TRAIN'] = co.OrderedDict()	
 		self.layers_['TEST']  = co.OrderedDict()
-		self.siameseConvert_  = False  #If the def has been convered to siamese or not. 
+		self.siameseConvert_  = False  #If the def has been convered to siamese or not.
+		if defFile is None:
+			return 
+		#If initializing from a file
 		fid   = open(defFile, 'r')
 		lines = fid.readlines()
 		i     = 0
 		layerInit = False
-		#Lines that are there before the layers start. 
-		self.initData_ = []
 		while True:
 			l = lines[i]
 			if not layerInit:
