@@ -4,6 +4,7 @@ import other_utils as ou
 import my_pycaffe_utils as mpu
 import caffe
 import collections as co
+import pickle
 
 class MatConvNetModel:
 	def __init__(self, inFile):
@@ -123,11 +124,21 @@ class MatConvNetModel:
 			pDef.add_layer(key, cl)
 		return pDef		
 
-	def save_caffe_model(self, outName='try', **kwargs):
+	##
+	def save_caffe_model(self,
+			 outName='/work4/pulkitag-code/code/ief/IEF/models/ief-googlenet-dec2015', **kwargs):
+		#caffe prototxt
 		defFile   = outName + '.prototxt'
+		#caffe model
 		modelFile = outName + '.caffemodel'
+		#the meta data
+		metaFile  = outName + '-meta.pkl'
+	
+		#obtain prototxt from matconvnet and write to disk 
 		pDef      = self.to_caffe(**kwargs)
 		pDef.write(defFile)
+
+		#Store th weights	
 		net = caffe.Net(defFile, caffe.TEST)
 		#List the parameter names of all the matconvnet params
 		matPrmNames = []
@@ -148,7 +159,13 @@ class MatConvNetModel:
 				print (k, i, net.params[k][i].data.shape, vals.shape)
 				net.params[k][i].data[...] = vals.reshape(net.params[k][i].data.shape) 
 		net.save(modelFile)
-		
+
+		#Store meta information
+		seedPose = np.array(self.dat_['params']['seed_pose'])
+		mxStpNrm = np.array(self.dat_['params']['MAX_STEP_NORM'])[0][0]
+		pickle.dump({'seedPose': seedPose, 'mxStepNorm': mxStpNrm}, 
+								open(metaFile, 'w'))	
+
 ##
 # Convert matconvnet network into a caffemodel
 def matconvnet_dag_to_caffemodel(inFile, outFile):

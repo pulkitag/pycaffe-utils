@@ -316,7 +316,8 @@ class MyNet:
 
 	
 	def set_preprocess(self, ipName='data',chSwap=(2,1,0), meanDat=None,
-										 imageDims=None, isBlobFormat=False, rawScale=None, cropDims=None):
+			imageDims=None, isBlobFormat=False, rawScale=None, cropDims=None,
+			noTransform=False):
 		'''
 			isBlobFormat: if the images are already coming in blobFormat or not. 
 			ipName    : the blob for which the pre-processing parameters need to be set. 
@@ -325,7 +326,11 @@ class MyNet:
 			cropDims  : the size to which the image needs to be cropped. 
 									if None - then it is automatically determined
 									this behavior is undesirable for some deploy prototxts 
+			noTransform: if no transform needs to be applied
 		'''
+		if noTransform:
+			self.transformer[ipName] = None
+			return
 		self.transformer[ipName] = caffe.io.Transformer({ipName: self.net.blobs[ipName].data.shape})
 		#Note blobFormat will be so used that finally the image will need to be flipped. 
 		self.transformer[ipName].set_transpose(ipName, (2,0,1))	
@@ -403,12 +408,15 @@ class MyNet:
 			ims: iterator over H * W * K sized images (K - number of channels) or K * H * W format. 
 		'''
 		#The image necessary needs to be float - otherwise caffe.io.resize fucks up.
+		assert ipName in self.transformer.keys()
 		ims = ims.astype(np.float32)
+		if self.tranformer[ipName] is None:
+			ims = self.resize_batch(ims)
+			return ims
+
 		if np.max(ims)<=1.0:
 			print "There maybe issues with image scaling. The maximum pixel value is 1.0 and not 255.0"
 	
-		assert ipName in self.transformer.keys()
-
 		im_ = np.zeros((len(ims), 
             self.imageDims[0], self.imageDims[1], self.imageDims[2]),
             dtype=np.float32)
