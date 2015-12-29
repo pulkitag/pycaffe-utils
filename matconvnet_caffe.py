@@ -123,6 +123,32 @@ class MatConvNetModel:
 			pDef.add_layer(key, cl)
 		return pDef		
 
+	def save_caffe_model(self, outName='try', **kwargs):
+		defFile   = outName + '.prototxt'
+		modelFile = outName + '.caffemodel'
+		pDef      = self.to_caffe(**kwargs)
+		pDef.write(defFile)
+		net = caffe.Net(defFile, caffe.TEST)
+		#List the parameter names of all the matconvnet params
+		matPrmNames = []
+		for p in range(len(self.dat_['net']['params']['name'])):
+			prmRef = self.dat_['net']['params']['name'][p][0]
+			matPrmNames.append(ou.ints_to_str(self.dat_['#refs#'][prmRef][:]))
+		#Name of caffe params
+		paramKeys = net.params.keys()
+		for k in paramKeys:
+			for i in range(2):
+				prm     = pDef.get_layer_property(k, 'param', propNum=i)
+				prmName = prm['name'][1:-1]
+				idx     = matPrmNames.index(prmName)
+				valRef  = self.dat_['net']['params']['value'][idx][0]
+				vals    = np.array(self.dat_['#refs#'][valRef])
+				if i==0:
+					vals = vals.transpose((0,1,3,2))
+				print (k, i, net.params[k][i].data.shape, vals.shape)
+				net.params[k][i].data[...] = vals.reshape(net.params[k][i].data.shape) 
+		net.save(modelFile)
+		
 ##
 # Convert matconvnet network into a caffemodel
 def matconvnet_dag_to_caffemodel(inFile, outFile):
@@ -140,7 +166,9 @@ def test_convert():
 								**{'ipDims': [1, 17, 2, 1]}) 
 	lbLayer  = mpu.get_layerdef_for_proto('DeployData', 'label', None, 
 								**{'ipDims': [1, 16, 2, 1]}) 
-	pdef  = model.to_caffe(ipLayers=[imgLayer, kpLayer, lbLayer], layerOrder=['render1', 'concat1'])
-	pdef.write(outName)
-	net   = caffe.Net(outName, caffe.TEST)
+	pdef  = model.save_caffe_model(ipLayers=[imgLayer, kpLayer, lbLayer], layerOrder=['render1', 'concat1'])
+	#pdef  = model.to_caffe(ipLayers=[imgLayer, kpLayer, lbLayer], layerOrder=['render1', 'concat1'])
+	#pdef.write(outName)
+	#net   = caffe.Net(outName, caffe.TEST)
+	#return pdef, net
 	
