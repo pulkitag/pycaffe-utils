@@ -10,13 +10,14 @@ cfg = edict()
 cfg.HOSTNAME = socket.gethostname()
 if cfg.HOSTNAME in ['anakin', 'vader', 'spock', 'poseidon']:
 	cfg.IS_EC2 = False	
-	#cfg.CAFFE_PATH = '/work4/pulkitag-code/pkgs/caffe-v2-3'
-	cfg.CAFFE_PATH = '/work4/pulkitag-code/pkgs/caffe-jeff-dec15'
+	cfg.CAFFE_PATH = '/work4/pulkitag-code/pkgs/caffe-v2-3'
+	#cfg.CAFFE_PATH = '/work4/pulkitag-code/pkgs/caffe-jeff-dec15'
 	cfg.STREETVIEW_CODE_PATH = '/work4/pulkitag-code/code/projStreetView'
 	cfg.STREETVIEW_DATA_MAIN = '/data0'
 	cfg.STREETVIEW_DATA_READ_IM = cfg.STREETVIEW_DATA_MAIN
 	#Billiards Path
 	cfg.BILLIARDS_DATA_MAIN = '/data1'
+	cfg.BILLIARDS_CODE_PATH = '/work4/pulkitag-code'
 	#Caffe Model Path
 	cfg.CAFFE_MODEL_PATH = '/data1/pulkitag/caffe_models/'
 else:

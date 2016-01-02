@@ -58,9 +58,15 @@ class MatConvNetModel:
 							**{'top': opNames[0]})
 	
 		elif lType == 'Pooling':
-			lDef = mpu.get_layerdef_for_proto(lType, name, ipNames[0], 
+			poolType = lParam['method'][0]
+			if poolType == 'max':
+				poolType = 'MAX'
+			elif poolType == 'avg':
+				poolType = 'AVE' 
+			lDef     = mpu.get_layerdef_for_proto(lType, name, ipNames[0], 
 							**{'top': opNames[0], 'kernel_size': int(lParam['poolSize'][0][0]),
-								 'stride': int(lParam['stride'][0][0]), 'pad': int(lParam['pad'][0][0])})
+								 'stride': int(lParam['stride'][0][0]), 'pad': int(lParam['pad'][0][0]),
+									'pool': poolType})
 	
 		elif lType == 'LRN':
 			N, kappa, alpha, beta = lParam['param'][0][0], lParam['param'][1][0],\

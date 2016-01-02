@@ -410,7 +410,7 @@ class MyNet:
 		#The image necessary needs to be float - otherwise caffe.io.resize fucks up.
 		assert ipName in self.transformer.keys()
 		ims = ims.astype(np.float32)
-		if self.tranformer[ipName] is None:
+		if self.transformer[ipName] is None:
 			ims = self.resize_batch(ims)
 			return ims
 

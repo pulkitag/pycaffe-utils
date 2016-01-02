@@ -336,7 +336,11 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 			topName = layerName
 		layerDef['top'] = '"%s"' % topName
 		layerDef['pooling_param'] = {}
-		layerDef['pooling_param']['pool'] = 'MAX'
+		if kwargs.has_key('pool'):
+			poolType = kwargs['pool']
+		else:
+			poolType = 'MAX'
+		layerDef['pooling_param']['pool'] = poolType
 		layerDef['pooling_param']['kernel_size'] = kwargs['kernel_size']
 		layerDef['pooling_param']['stride']      = kwargs['stride']
 		if kwargs.has_key('pad'):
