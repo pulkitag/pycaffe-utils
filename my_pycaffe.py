@@ -12,6 +12,8 @@ from six import string_types
 import copy
 from easydict import EasyDict as edict 
 import my_pycaffe_utils as mpu
+import pickle
+import collections as co
 
 class layerSz:
 	def __init__(self, stride, filterSz):
@@ -548,7 +550,7 @@ class MyNet:
 
 	def vis_weights(self, blobName, blobNum=0, ax=None, titleName=None, isFc=False,
 						 h=None, w=None, returnData=False, chSt=0, chEn=3): 
-		assert blobName in self.net.blobs, 'BlobName not found'
+		assert blobName in self.net.params, 'BlobName not found'
 		dat  = copy.deepcopy(self.net.params[blobName][blobNum].data)
 		if isFc:
 			dat = dat.transpose((2,3,0,1))
@@ -574,7 +576,7 @@ class MyNet:
 class SolverDebugStore(object):
 	pass	
 
-class MySolver:
+class MySolver(object):
 	def __init__(self):
 		self.solver_ = None
 
@@ -583,59 +585,109 @@ class MySolver:
 		del self.net_
 
 	@classmethod
-	def from_file(cls, solFile):
+	def from_file(cls, solFile, recIter=20):
+		'''
+			solFile: solver prototxt from which to load the net
+			recIter: the frequency of recording
+		'''
 		self = cls()
-		self.solver_     = caffe.SGDSolver(solFile)
-		self.net_        = self.solver_.net
-		self.layerNames_ = [l for l in self.net_._layer_names]
 		self.solFile_    = solFile
-		self.paramNames_ = self.net_.params.keys()
-		self.blobNames_  = self.net_.blobs.keys()
+		self.recIter_    = recIter
+		self.setup_solver()
+		self.plotSetup_  = False
 		return self	
 
 	##
-	# Solver in the debug mode	
-	def debug_solve(self, maxIter=None):
-		self.solDef_ = mpu.SolverDef.from_file(self.solFile_)
-		if maxIter is None:
-			maxIter = self.solDef_.get_property('max_iter')	
+	#setup the solver
+	def setup_solver(self):
+		self.solDef_  = mpu.SolverDef.from_file(self.solFile_)
+		self.maxIter_ = self.solDef_.get_property('max_iter')
+		if self.solDef_.has_property('solver_mode'):
+			solverMode    = self.solDef_.get_property('solver_mode')
+		else:
+			solverMode    = 'GPU'
+		if solverMode == 'GPU':
+			if self.solDef_.has_property('device_id'):
+				device = int(self.solDef_.get_property('device_id'))
+			else:
+				device = 0
+			print ('GPU Mode, setting device %d' % device)
+			caffe.set_device(device)
+			caffe.set_mode_gpu()
+		else:
+			print ('CPU Mode')
+			caffe.set_mode_cpu()
+	
+		self.solver_     = caffe.SGDSolver(self.solFile_)
+		self.net_        = self.solver_.net
+		self.layerNames_ = [l for l in self.net_._layer_names]
+		self.paramNames_ = self.net_.params.keys()
+		self.blobNames_  = self.net_.blobs.keys()
+		
 		#Storing the data
 		self.featVals    = edict()
 		self.paramVals   = [edict(), edict()]	
 		self.paramUpdate = [edict(), edict()]	
-		#Axis for plotting
-		self.featValsAx    = edict()
-		self.paramValsAx   = edict()
-		self.paramUpdateAx = edict()
-		plt.ion()
+		#Blobs
 		for i,b in enumerate(self.blobNames_):
 			self.featVals[b] = []
-			self.featValsAx[b] = plt.subplot(len(self.blobNames_),1,i+1)
-			self.featValsAx[b].set_title(b)
-
+		#Params
 		for p in self.paramNames_:
 			self.paramVals[0][p] = []
 			self.paramVals[1][p] = []
 			self.paramUpdate[0][p] = []
 			self.paramUpdate[1][p] = []
 
-		for i in range(maxIter):
+	##
+	# Solve	
+	def solve(self, numSteps=None):
+		if numSteps is None:
+			numSteps = self.maxIter_
+		for i in range(numSteps):
 			self.solver_.step(1)
-			self.record_params()	
+			if np.mod(self.solver_.iter, self.recIter_)==1:
+				self.record_feats_params()	
 
 	##
 	#Record the data
-	def record_params(self, isPlot=True):
+	def record_feats_params(self):
 		for b in self.blobNames_:
 			self.featVals[b].append(np.mean(np.abs(self.net_.blobs[b].data)))
-			if isPlot:
-				N = len(self.featVals[b])
-				self.featValsAx[b].plot(range(N), self.featVals[b])
-				plt.draw()
 		for p in self.paramNames_:
 			for i in range(2):
 				self.paramVals[i][p].append(np.mean(np.abs(self.net_.params[p][i].data)))	
-				self.paramUpdate[i][p].append(np.mean(np.abs(self.net_.params[p][i].data)))	
+				self.paramUpdate[i][p].append(np.mean(np.abs(self.net_.params[p][i].diff)))
+
+	##
+	#Dump the data to the file
+	def dump_to_file(self, fName):
+		data = co.OrderedDict()
+		data['blobs']  = co.OrderedDict()
+		for b in self.blobNames_:
+			data['blobs'][b] = self.featVals[b]
+		data['params']       = co.OrderedDict()
+		data['paramsUpdate'] = co.OrderedDict()
+		for p in self.paramNames_:
+			data['params'][p]       = []
+			data['paramsUpdate'][p] = []
+			for i in range(2):
+				data['params'][p].append(self.paramVals[i][p])	
+				data['paramsUpdate'][p].append(self.paramVals[i][p])
+		data['recIter'] = self.recIter_	
+		pickle.dump(data, open(fName, 'w'))
+
+	##
+	#Read the logging data from file
+	def read_from_file(self, fName):
+		data = pickle.load(open(fName, 'r'))
+		for k, b in enumerate(data['blobs'].keys()):
+			self.featVals[b] = data['blobs'][b]
+			assert b == self.blobNames_[k]
+		for k, p in enumerate(data['params'].keys()):
+			for i in range(2):
+				self.paramVals[i][p]   = data['params'][p][i]
+				self.paramUpdate[i][p] = data['paramsUpdate'][p][i] 
+				assert p == self.paramNames_[k]
 
 	##
 	# Return pointer to layer
@@ -643,6 +695,62 @@ class MySolver:
 		assert layerName in self.layerNames_, 'layer not found'
 		index = self.layerNames_.index(layerName)
 		return self.net_.layers[index]
+
+	##
+	#Internal funciton for defining axes
+	def _get_axes(self, titleNames, figTitle):
+		numSub = np.ceil(np.sqrt(self.maxPerFigure_))
+		N      = len(titleNames)
+		allAx  = []
+		count  = 0
+		for fn in range(int(np.ceil(float(N)/self.maxPerFigure_))):
+			#Given a figure
+			fig = plt.figure()
+			fig.suptitle(figTitle)
+			ax = []
+			en = min(N, count + self.maxPerFigure_)
+			for i,tit in enumerate(titleNames[count:en]):
+				ax.append((fig, fig.add_subplot(numSub, numSub, i+1)))
+				ax[i][1].set_title(tit)
+			count += self.maxPerFigure_
+			allAx = allAx + ax
+		return allAx
+
+	##
+	#Setup for plotting
+	def setup_plots(self):
+		plt.close('all')
+		plt.ion()
+		self.maxPerFigure_   = 16
+		self.axBlobs_        = self._get_axes(self.blobNames_,  'Feature Values')
+		self.axParamValW_    = self._get_axes(self.paramNames_, 'Parameter Values') 
+		self.axParamDeltaW_  = self._get_axes(self.paramNames_, 'Parameter Updates') 
+		self.plotSetup_      = True
+	
+	##
+	#Plot the log
+	def plot(self):
+		if not self.plotSetup_:
+			self.setup_plots()
+		plt.ion()
+		for i,bn in enumerate(self.blobNames_):
+			fig, ax = self.axBlobs_[i]
+			plt.figure(fig.number)
+			ax.plot(range(len(self.featVals[bn])), self.featVals[bn])			
+			plt.draw()
+			plt.show()
+		for i,pn in enumerate(self.paramNames_):
+			#The parameters
+			fig, ax = self.axParamValW_[i]
+			plt.figure(fig.number)
+			ax.plot(range(len(self.paramVals[0][pn])), self.paramVals[0][pn])			
+			#The delta in parameters
+			fig, ax = self.axParamDeltaW_[i]
+			plt.figure(fig.number)
+			ax.plot(range(len(self.paramUpdate[0][pn])), self.paramUpdate[0][pn])			
+			plt.draw()
+			plt.show()
+	
 
 ##
 # Visualize filters

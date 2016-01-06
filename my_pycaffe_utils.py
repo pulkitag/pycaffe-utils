@@ -1432,6 +1432,14 @@ class SolverDef:
 		ou.set_recursive_key(self.data_, propName, value)
 
 	##
+	#Has property
+	def has_property(self, propName):
+		if propName in self.data_.keys():
+			return True
+		else:
+			return False
+
+	##
   # Write the solver file
 	def write(self, outFile):
 		with open(outFile, 'w') as fid:
@@ -1634,14 +1642,15 @@ class CaffeExperiment:
 	def __init__(self, dataExpName, caffeExpName, expDirPrefix, snapDirPrefix,
 							 defPrefix = 'caffenet', solverPrefix = 'solver',
 							 logPrefix = 'log', runPrefix = 'run', deviceId = 0,
-							 repNum = None, isTest=False):
+							 debugPrefix='debug', repNum = None, isTest=False):
 		'''
 			experiment directory: expDirPrefix  + dataExpName
 			snapshot   directory: snapDirPrefix + dataExpName
 			solver     file     : expDir + solverPrefix + caffeExpName
 			net-def    file     : expDir + defPrefix    + caffeExpName
 			log        file     : expDir + logPrefix    + caffeExpName
-			run        file     : expDir + runPrefix    + caffeExpName 
+			run        file     : expDir + runPrefix    + caffeExpName
+			debug      file     : expDir + runPrefix    + caffeExpName 
 		'''
 		self.dataExpName_  = dataExpName
 		self.caffeExpName_ = caffeExpName
@@ -1658,6 +1667,7 @@ class CaffeExperiment:
 			defDeployFile = defPrefix    + '_' + caffeExpName + '_deploy.prototxt'
 			defRecFile    = defPrefix    + '_' + caffeExpName + '_reconstruct.prototxt'
 			logFile       = logPrefix + '_' + '%s' + '_' + caffeExpName + '.txt'
+			debugFile     = debugPrefix + '_' + caffeExpName + '.pkl'
 			runFile       = runPrefix + '_' + '%s' + '_' + caffeExpName + '.sh'
 			snapPrefix    = defPrefix + '_' + caffeExpName 
 		else:
@@ -1666,6 +1676,7 @@ class CaffeExperiment:
 			defDeployFile = caffeExpName + '_' + defPrefix    + '_deploy.prototxt'
 			defRecFile    = caffeExpName + '_' + defPrefix    + '_reconstruct.prototxt'
 			logFile       = caffeExpName + '_' + '%s' + '_' + logPrefix + '.txt'
+			debugFile     = caffeExpName + '_' + debugPrefix + '.pkl'
 			runFile       = caffeExpName + '_' + '%s' + '_' + logPrefix + '.sh'
 			snapPrefix    = caffeExpName + '_' + defPrefix 
 
@@ -1678,7 +1689,8 @@ class CaffeExperiment:
 		self.files_['logTest']  = os.path.join(self.dirs_['exp'], logFile % 'test')
 		self.files_['runTrain'] = os.path.join(self.dirs_['exp'], runFile % 'train')
 		self.files_['runTest']  = os.path.join(self.dirs_['exp'], runFile % 'test')
-
+		self.files_['debug']  = os.path.join(self.dirs_['exp'], debugFile)
+		
 		#snapshot
 		self.files_['snap'] = os.path.join(snapDirPrefix, dataExpName,
 													snapPrefix + '_iter_%d.caffemodel')  
