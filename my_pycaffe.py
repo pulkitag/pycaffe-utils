@@ -319,7 +319,7 @@ class MyNet:
 	
 	def set_preprocess(self, ipName='data',chSwap=(2,1,0), meanDat=None,
 			imageDims=None, isBlobFormat=False, rawScale=None, cropDims=None,
-			noTransform=False):
+			noTransform=False, numCh=3):
 		'''
 			isBlobFormat: if the images are already coming in blobFormat or not. 
 			ipName    : the blob for which the pre-processing parameters need to be set. 
@@ -329,7 +329,9 @@ class MyNet:
 									if None - then it is automatically determined
 									this behavior is undesirable for some deploy prototxts 
 			noTransform: if no transform needs to be applied
+			numCh      : number of channels
 		'''
+		assert len(chSwap) == numCh, 'Number of channels mismatch'
 		if noTransform:
 			self.transformer[ipName] = None
 			return
@@ -370,8 +372,8 @@ class MyNet:
 			if isinstance(meanDat, string_types):
 				meanDat = read_mean(meanDat)
 			elif type(meanDat) ==  tuple:
-				meanDat = np.array(meanDat).reshape(3,1,1)
-				meanDat = meanDat * (np.ones((3, self.crop[2] - self.crop[0],\
+				meanDat = np.array(meanDat).reshape(numCh,1,1)
+				meanDat = meanDat * (np.ones((numCh, self.crop[2] - self.crop[0],\
 									 self.crop[3]-self.crop[1])).astype(np.float32))
 				isTuple = True
 			_,h,w = meanDat.shape
