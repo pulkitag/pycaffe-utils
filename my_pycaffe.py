@@ -694,10 +694,10 @@ class MySolver(object):
 	def dump_to_file(self, fName):
 		data = co.OrderedDict()
 		for ph in self.phase_:
-			data[ph] = edict()
+			data[ph] = co.OrderedDict()
 			data[ph]['blobs']  = co.OrderedDict()
 			for b in self.blobNames_[ph]:
-				data[ph]['blobs'][b] = self.featVals[b]
+				data[ph]['blobs'][b] = self.featVals[ph][b]
 			data[ph]['params']       = co.OrderedDict()
 			data[ph]['paramsUpdate'] = co.OrderedDict()
 			for p in self.paramNames_[ph]:
@@ -706,8 +706,8 @@ class MySolver(object):
 				for i in range(2):
 					data[ph]['params'][p].append(self.paramVals[ph][i][p])	
 					data[ph]['paramsUpdate'][p].append(self.paramVals[ph][i][p])
-			data['recFreq'] = self.recFreq_	
-			data['recIter'] = self.recIter_
+		data['recFreq'] = self.recFreq_	
+		data['recIter'] = self.recIter_
 		pickle.dump(data, open(fName, 'w'))
 
 	##
@@ -723,6 +723,7 @@ class MySolver(object):
 					self.paramVals[ph][i][p]   = data[ph]['params'][p][i]
 					self.paramUpdate[ph][i][p] = data[ph]['paramsUpdate'][p][i] 
 					assert p == self.paramNames_[ph][k]
+		self.recIter_ = data['recIter']
 
 	##
 	# Return pointer to layer
