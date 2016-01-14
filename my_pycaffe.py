@@ -331,7 +331,8 @@ class MyNet:
 			noTransform: if no transform needs to be applied
 			numCh      : number of channels
 		'''
-		assert len(chSwap) == numCh, 'Number of channels mismatch'
+		if chSwap is not None:
+			assert len(chSwap) == numCh, 'Number of channels mismatch'
 		if noTransform:
 			self.transformer[ipName] = None
 			return
@@ -507,7 +508,7 @@ class MyNet:
 				for op_, data in ops.iteritems():
 					if data.ndim==0:
 						continue
-					print (op_, data.shape)
+					#print (op_, data.shape)
 					ops[op_] = data[0:N]
 			else:
 				raise Exception('No Input data specified.')
@@ -581,6 +582,7 @@ class SolverDebugStore(object):
 class MySolver(object):
 	def __init__(self):
 		self.solver_ = None
+		self.phase_  = ['train', 'test']
 
 	def __del__(self):
 		del self.solver_
@@ -620,8 +622,17 @@ class MySolver(object):
 			print ('CPU Mode')
 			caffe.set_mode_cpu()
 	
-		self.solver_     = caffe.SGDSolver(self.solFile_)
+		self.solver_       = caffe.SGDSolver(self.solFile_)
+		self.net_          = co.OrderedDict()
+		self.net_[self.phase_[0]] = self.solver_.net 	
 		self.net_        = self.solver_.net
+		self.testNet_    = self.solver_.test_nets[0]
+		if len(self.solver_.test_nets) > 1:
+			print (' ##### WARNING - THERE ARE MORE THAN ONE TEST-NETS, FEATURE VALS
+							FOR TEST NETS > 1 WILL NOT BE RECORDED #################')
+			ip = raw_input('ARE YOU SURE YOU WANT TO CONTINUE(y/n)?')
+			if ip == 'n':
+				raise Exception('Quitting')
 		self.layerNames_ = [l for l in self.net_._layer_names]
 		self.paramNames_ = self.net_.params.keys()
 		self.blobNames_  = self.net_.blobs.keys()

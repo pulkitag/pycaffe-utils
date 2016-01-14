@@ -15,6 +15,7 @@ import scipy.io as sio
 import copy
 from pycaffe_config import cfg
 from os import path as osp
+import other_utils as ou
 
 if not cfg.IS_EC2:
 	#import matlab.engine as men
@@ -352,16 +353,25 @@ class GenericWindowReader:
 		return imDat, lbls
 		
 	#Get the processed images and labels
-	def read_next_processed(self, rootFolder):
+	def read_next_processed(self, rootFolder, returnName=False):
 		imDat, lbls = self.read_next()
-		ims = []
+		ims     = []
+		imNames, outNames = [], []
 		for l in imDat:
 			imName, ch, h, w, x1, y1, x2, y2 = l.strip().split()
 			imName = osp.join(rootFolder, imName)
 			x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
 			im = scm.imread(imName)
 			ims.append(im[y1:y2, x1:x2,:])
-		return ims, lbls[0]	
+			imNames.append(imName)
+			#Generate an outprefix that maybe used to save the images
+			_, fName  = osp.split(imName)
+			ext       = fName[-4:]	
+			outNames.append(fName[:-4] + '-%d-%d-%d-%d%s' % (x1,y1,x2,y2,ext))
+		if returnName:
+			return ims, lbls[0], imNames, outNames
+		else:
+			return ims, lbls[0]	
 	
 	def get_all_labels(self):
 		readFlag = True
@@ -385,6 +395,29 @@ class GenericWindowReader:
 	def close(self):
 		self.fid_.close()
 		self.open_ = False
+
+	#Save image crops
+	def save_crops(self, rootFolder, tgtDir, numIm=None):
+		'''
+			rootFolder: the root folder for the window file
+			tgtDir    : the directory where the images should be saved
+		'''
+		count    = 0
+		readFlag = True
+		ou.mkdir(tgtDir)	
+		while readFlag:	
+			ims, _, imNames, oNames = self.read_next_processed(rootFolder,
+																 returnName=True)
+			for im, name, oName in zip(ims, imNames, oNames):
+				svName   = osp.join(tgtDir, oName)
+				scm.imsave(svName, im)
+			if self.is_eof():
+				readFlag = False
+			count += 1
+			if numIm is not None and count >= numIm:
+				readFlag = False
+
+	
 
 ##
 # For writing generic window file layers. 
