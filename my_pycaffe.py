@@ -589,14 +589,14 @@ class MySolver(object):
 		del self.net_
 
 	@classmethod
-	def from_file(cls, solFile, recIter=20):
+	def from_file(cls, solFile, recFreq=20):
 		'''
 			solFile: solver prototxt from which to load the net
-			recIter: the frequency of recording
+			recFreq: the frequency of recording
 		'''
 		self = cls()
 		self.solFile_    = solFile
-		self.recIter_    = recIter
+		self.recFreq_    = recFreq
 		self.setup_solver()
 		self.plotSetup_  = False
 		return self	
@@ -605,7 +605,8 @@ class MySolver(object):
 	#setup the solver
 	def setup_solver(self):
 		self.solDef_  = mpu.SolverDef.from_file(self.solFile_)
-		self.maxIter_ = self.solDef_.get_property('max_iter')
+		self.maxIter_ = int(self.solDef_.get_property('max_iter'))
+		self.testInterval_ = int(self.solDef_.get_property('test_interval')) 
 		if self.solDef_.has_property('solver_mode'):
 			solverMode    = self.solDef_.get_property('solver_mode')
 		else:
@@ -625,31 +626,42 @@ class MySolver(object):
 		self.solver_       = caffe.SGDSolver(self.solFile_)
 		self.net_          = co.OrderedDict()
 		self.net_[self.phase_[0]] = self.solver_.net 	
-		self.net_        = self.solver_.net
-		self.testNet_    = self.solver_.test_nets[0]
+		self.net_[self.phase_[1]] = self.solver_.test_nets[0]
 		if len(self.solver_.test_nets) > 1:
-			print (' ##### WARNING - THERE ARE MORE THAN ONE TEST-NETS, FEATURE VALS
+			print (' ##### WARNING - THERE ARE MORE THAN ONE TEST-NETS, FEATURE VALS\
 							FOR TEST NETS > 1 WILL NOT BE RECORDED #################')
 			ip = raw_input('ARE YOU SURE YOU WANT TO CONTINUE(y/n)?')
 			if ip == 'n':
 				raise Exception('Quitting')
-		self.layerNames_ = [l for l in self.net_._layer_names]
-		self.paramNames_ = self.net_.params.keys()
-		self.blobNames_  = self.net_.blobs.keys()
+		self.layerNames_ = co.OrderedDict()
+		self.paramNames_ = co.OrderedDict()
+		self.blobNames_  = co.OrderedDict()
+		for ph in self.phase_:
+			self.layerNames_[ph] = [l for l in self.net_[ph]._layer_names]
+			self.paramNames_[ph] = self.net_[ph].params.keys()
+			self.blobNames_[ph]  = self.net_[ph].blobs.keys()
 		
 		#Storing the data
-		self.featVals    = edict()
-		self.paramVals   = [edict(), edict()]	
-		self.paramUpdate = [edict(), edict()]	
-		#Blobs
-		for i,b in enumerate(self.blobNames_):
-			self.featVals[b] = []
-		#Params
-		for p in self.paramNames_:
-			self.paramVals[0][p] = []
-			self.paramVals[1][p] = []
-			self.paramUpdate[0][p] = []
-			self.paramUpdate[1][p] = []
+		self.featVals    = co.OrderedDict()
+		self.paramVals   = co.OrderedDict()
+		self.paramUpdate = co.OrderedDict()
+		for ph in self.phase_:
+			self.featVals[ph]    = edict()
+			self.paramVals[ph]   = [edict(), edict()]	
+			self.paramUpdate[ph] = [edict(), edict()]	
+			#Blobs
+			for i,b in enumerate(self.blobNames_[ph]):
+				self.featVals[ph][b] = []
+			#Params
+			for p in self.paramNames_[ph]:
+				self.paramVals[ph][0][p] = []
+				self.paramVals[ph][1][p] = []
+				self.paramUpdate[ph][0][p] = []
+				self.paramUpdate[ph][1][p] = []
+		#For recording the iterations at which data was recorded
+		self.recIter_ = co.OrderedDict() 
+		for ph in self.phase_:
+			self.recIter_[ph] = []
 
 	##
 	# Solve	
@@ -657,57 +669,67 @@ class MySolver(object):
 		if numSteps is None:
 			numSteps = self.maxIter_
 		for i in range(numSteps):
+			if np.mod(self.solver_.iter, self.recFreq_)==0:
+				self.record_feats_params(phases=['train'])
+				self.recIter_['train'].append(self.solver_.iter)
+			if np.mod(self.solver_.iter, self.testInterval_)==0:
+				self.record_feats_params(phases=['test'])
+				self.recIter_['test'].append(self.solver_.iter)
 			self.solver_.step(1)
-			if np.mod(self.solver_.iter, self.recIter_)==1:
-				self.record_feats_params()	
-
 	##
 	#Record the data
-	def record_feats_params(self):
-		for b in self.blobNames_:
-			self.featVals[b].append(np.mean(np.abs(self.net_.blobs[b].data)))
-		for p in self.paramNames_:
-			for i in range(2):
-				self.paramVals[i][p].append(np.mean(np.abs(self.net_.params[p][i].data)))	
-				self.paramUpdate[i][p].append(np.mean(np.abs(self.net_.params[p][i].diff)))
+	def record_feats_params(self, phases=None):
+		if phases is None:
+			phases = self.phase_
+		for ph in phases:
+			for b in self.blobNames_[ph]:
+				self.featVals[ph][b].append(np.mean(np.abs(self.net_[ph].blobs[b].data)))
+			for p in self.paramNames_[ph]:
+				for i in range(2):
+					self.paramVals[ph][i][p].append(np.mean(np.abs(self.net_[ph].params[p][i].data)))	
+					self.paramUpdate[ph][i][p].append(np.mean(np.abs(self.net_[ph].params[p][i].diff)))
 
 	##
 	#Dump the data to the file
 	def dump_to_file(self, fName):
 		data = co.OrderedDict()
-		data['blobs']  = co.OrderedDict()
-		for b in self.blobNames_:
-			data['blobs'][b] = self.featVals[b]
-		data['params']       = co.OrderedDict()
-		data['paramsUpdate'] = co.OrderedDict()
-		for p in self.paramNames_:
-			data['params'][p]       = []
-			data['paramsUpdate'][p] = []
-			for i in range(2):
-				data['params'][p].append(self.paramVals[i][p])	
-				data['paramsUpdate'][p].append(self.paramVals[i][p])
-		data['recIter'] = self.recIter_	
+		for ph in self.phase_:
+			data[ph] = edict()
+			data[ph]['blobs']  = co.OrderedDict()
+			for b in self.blobNames_[ph]:
+				data[ph]['blobs'][b] = self.featVals[b]
+			data[ph]['params']       = co.OrderedDict()
+			data[ph]['paramsUpdate'] = co.OrderedDict()
+			for p in self.paramNames_[ph]:
+				data[ph]['params'][p]       = []
+				data[ph]['paramsUpdate'][p] = []
+				for i in range(2):
+					data[ph]['params'][p].append(self.paramVals[ph][i][p])	
+					data[ph]['paramsUpdate'][p].append(self.paramVals[ph][i][p])
+			data['recFreq'] = self.recFreq_	
+			data['recIter'] = self.recIter_
 		pickle.dump(data, open(fName, 'w'))
 
 	##
 	#Read the logging data from file
 	def read_from_file(self, fName):
 		data = pickle.load(open(fName, 'r'))
-		for k, b in enumerate(data['blobs'].keys()):
-			self.featVals[b] = data['blobs'][b]
-			assert b == self.blobNames_[k]
-		for k, p in enumerate(data['params'].keys()):
-			for i in range(2):
-				self.paramVals[i][p]   = data['params'][p][i]
-				self.paramUpdate[i][p] = data['paramsUpdate'][p][i] 
-				assert p == self.paramNames_[k]
+		for ph in self.phase_:
+			for k, b in enumerate(data[ph]['blobs'].keys()):
+				self.featVals[ph][b] = data[ph]['blobs'][b]
+				assert b == self.blobNames_[ph][k]
+			for k, p in enumerate(data[ph]['params'].keys()):
+				for i in range(2):
+					self.paramVals[ph][i][p]   = data[ph]['params'][p][i]
+					self.paramUpdate[ph][i][p] = data[ph]['paramsUpdate'][p][i] 
+					assert p == self.paramNames_[ph][k]
 
 	##
 	# Return pointer to layer
-	def get_layer_pointer(self, layerName):
-		assert layerName in self.layerNames_, 'layer not found'
-		index = self.layerNames_.index(layerName)
-		return self.net_.layers[index]
+	def get_layer_pointer(self, layerName, ph='train'):
+		assert layerName in self.layerNames_[ph], 'layer not found'
+		index = self.layerNames_[ph].index(layerName)
+		return self.net_[ph].layers[index]
 
 	##
 	#Internal funciton for defining axes
@@ -735,9 +757,16 @@ class MySolver(object):
 		plt.close('all')
 		plt.ion()
 		self.maxPerFigure_   = 16
-		self.axBlobs_        = self._get_axes(self.blobNames_,  'Feature Values')
-		self.axParamValW_    = self._get_axes(self.paramNames_, 'Parameter Values') 
-		self.axParamDeltaW_  = self._get_axes(self.paramNames_, 'Parameter Updates') 
+		self.axBlobs_        = co.OrderedDict()
+		self.axParamValW_    = co.OrderedDict()
+		self.axParamDeltaW_  = co.OrderedDict()
+		for ph in self.phase_:
+			self.axBlobs_[ph]       = self._get_axes(self.blobNames_[ph],  
+																'%s-Feature Values' % ph)
+			self.axParamValW_[ph]   = self._get_axes(self.paramNames_[ph],
+																'%s-Parameter Values' % ph) 
+			self.axParamDeltaW_[ph] = self._get_axes(self.paramNames_[ph], 
+																'%s-Parameter Updates' % ph) 
 		self.plotSetup_      = True
 	
 	##
@@ -746,24 +775,25 @@ class MySolver(object):
 		if not self.plotSetup_:
 			self.setup_plots()
 		plt.ion()
-		for i,bn in enumerate(self.blobNames_):
-			fig, ax = self.axBlobs_[i]
-			plt.figure(fig.number)
-			ax.plot(range(len(self.featVals[bn])), self.featVals[bn])			
-			plt.draw()
-			plt.show()
-		for i,pn in enumerate(self.paramNames_):
-			#The parameters
-			fig, ax = self.axParamValW_[i]
-			plt.figure(fig.number)
-			ax.plot(range(len(self.paramVals[0][pn])), self.paramVals[0][pn])			
-			#The delta in parameters
-			fig, ax = self.axParamDeltaW_[i]
-			plt.figure(fig.number)
-			ax.plot(range(len(self.paramUpdate[0][pn])), self.paramUpdate[0][pn])			
-			plt.draw()
-			plt.show()
-	
+		for ph in self.phase_:
+			for i,bn in enumerate(self.blobNames_[ph]):
+				fig, ax = self.axBlobs_[ph][i]
+				plt.figure(fig.number)
+				ax.plot(np.array(self.recIter_[ph]), self.featVals[ph][bn])			
+				plt.draw()
+				plt.show()
+			for i,pn in enumerate(self.paramNames_[ph]):
+				#The parameters
+				fig, ax = self.axParamValW_[ph][i]
+				plt.figure(fig.number)
+				ax.plot(np.array(self.recIter_[ph]), self.paramVals[ph][0][pn])			
+				#The delta in parameters
+				fig, ax = self.axParamDeltaW_[ph][i]
+				plt.figure(fig.number)
+				ax.plot(np.array(self.recIter_[ph]), self.paramUpdate[ph][0][pn])			
+				plt.draw()
+				plt.show()
+		
 
 ##
 # Visualize filters
