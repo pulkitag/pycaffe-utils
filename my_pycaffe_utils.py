@@ -1595,15 +1595,21 @@ class ExperimentFiles:
 		self.solDef_.write(self.solver_)	
 
 	##		
-	def extract_snapshot_name(self):
+	def extract_snapshot_name(self, getSolverFile=False):
 		'''
 			Find the name with which models are being stored. 
 		'''
 		snapshot   = self.solDef_.get_property('snapshot_prefix')
 		#_iter_%d.caffemodel is added by caffe while snapshotting. 
-		snapshot = snapshot[1:-1] + '_iter_%d.caffemodel'
-		snapshot = ou.chunk_filename(snapshot)
-		return snapshot
+		snapshotName = snapshot[1:-1] + '_iter_%d.caffemodel'
+		snapshotName = ou.chunk_filename(snapshotName)
+		#solver file
+		solverName   = snapshot[1:-1] + '_iter_%d.solverstate'
+		solverName   = ou.chunk_filename(snapshotName)	
+		if getSolverFile:
+			return solverName
+		else:	
+			return snapshot
 
 	##
 	def write_netdef(self):
@@ -1611,15 +1617,18 @@ class ExperimentFiles:
 
 	##
 	# Run the Experiment
-	def run(self):
-		cwd = os.getcwd()
-		subprocess.check_call([('cd %s && ' % self.modelDir_) + self.runTrain_] ,shell=True)
-		os.chdir(cwd)
-		shutil.copyfile(self.logTrain_, self.resultLogTrain_)		
-		if self.isTest_:
-			subprocess.check_call([('cd %s && ' % self.modelDir_) + self.runTest_] ,shell=True)
+	def run(self, runMode='cmdline'):
+		if runMode == 'cmdline':
+			cwd = os.getcwd()
+			subprocess.check_call([('cd %s && ' % self.modelDir_) + self.runTrain_] ,shell=True)
 			os.chdir(cwd)
-			shutil.copyfile(self.logTest_, self.resultLogTest_)		
+			shutil.copyfile(self.logTrain_, self.resultLogTrain_)		
+			if self.isTest_:
+				subprocess.check_call([('cd %s && ' % self.modelDir_) + self.runTest_] ,shell=True)
+				os.chdir(cwd)
+				shutil.copyfile(self.logTest_, self.resultLogTest_)	
+		else:
+			raise Exception('runMode %s not recognized' % runMode)	
 
 	def setup_resume(self, resumeIter):
 		modelFile  = self.extract_snapshot_name() % resumeIter
@@ -1642,7 +1651,8 @@ class CaffeExperiment:
 	def __init__(self, dataExpName, caffeExpName, expDirPrefix, snapDirPrefix,
 							 defPrefix = 'caffenet', solverPrefix = 'solver',
 							 logPrefix = 'log', runPrefix = 'run', deviceId = 0,
-							 debugPrefix='debug', repNum = None, isTest=False):
+							 debugPrefix='debug', repNum = None, isTest=False,
+							 runSolver=True):
 		'''
 			experiment directory: expDirPrefix  + dataExpName
 			snapshot   directory: snapDirPrefix + dataExpName
@@ -1650,7 +1660,9 @@ class CaffeExperiment:
 			net-def    file     : expDir + defPrefix    + caffeExpName
 			log        file     : expDir + logPrefix    + caffeExpName
 			run        file     : expDir + runPrefix    + caffeExpName
-			debug      file     : expDir + runPrefix    + caffeExpName 
+			debug      file     : expDir + runPrefix    + caffeExpName
+			runSolver           : True  - use caffe.SGDSolver for running  net 
+														False - use command line interface 
 		'''
 		self.dataExpName_  = dataExpName
 		self.caffeExpName_ = caffeExpName
@@ -1707,8 +1719,10 @@ class CaffeExperiment:
 											logFileTrain = logFile % 'train', logFileTest = logFile % 'test', 
 											runFileTrain = runFile % 'train', runFileTest = runFile % 'test', 
 											deviceId = deviceId, repNum = repNum, isTest=isTest)
-		self.isTest_  = isTest
-		self.net_     = None
+		self.isTest_    = isTest
+		self.net_       = None
+		self.solver_    = None
+		self.runSolver_ = runSolver
 
 	##
 	#initalize from solver file/SolverDef and netdef file/ProtoDef
@@ -1749,8 +1763,8 @@ class CaffeExperiment:
 		return self.expFile_.netDef_.get_layernames_from_type(layerType, phase=phase)
 
 	##
-	def get_snapshot_name(self, numIter=10000):
-		snapName = self.expFile_.extract_snapshot_name() % numIter
+	def get_snapshot_name(self, numIter=10000, getSolverFile=False):
+		snapName = self.expFile_.extract_snapshot_name(getSolverFile=getSolverFile) % numIter
 		snapName = ou.chunk_filename(snapName)
 		return snapName
 
@@ -1828,8 +1842,11 @@ class CaffeExperiment:
 
 	##
 	# Run the experiment
-	def run(self):
-		self.expFile_.run()
+	def run(self, runMode='cmdline'):
+		if runMode in ['cmdline']:
+			self.expFile_.run(runMode=runMode)
+		else:
+			
 	
 	def get_test_accuracy(self):
 		return test_log2acc(self.files_['logTest'])
