@@ -589,14 +589,16 @@ class MySolver(object):
 		del self.net_
 
 	@classmethod
-	def from_file(cls, solFile, recFreq=20):
+	def from_file(cls, solFile, recFreq=20, dumpLogFreq=None):
 		'''
-			solFile: solver prototxt from which to load the net
-			recFreq: the frequency of recording
+			solFile    : solver prototxt from which to load the net
+			recFreq    : the frequency of recording
+			dumpLogFreq: the frequency with which dumpLog should be noted 
 		'''
 		self = cls()
 		self.solFile_    = solFile
 		self.recFreq_    = recFreq
+		self.dumpLogFreq_= dumpLogFreq 
 		self.setup_solver()
 		self.plotSetup_  = False
 		return self	
@@ -662,6 +664,22 @@ class MySolver(object):
 		self.recIter_ = co.OrderedDict() 
 		for ph in self.phase_:
 			self.recIter_[ph] = []
+
+	##
+	#Restore the solver from a previous state
+	def restore(self, fName):
+		'''
+			fName: the name of the file from which solver needs to be resumed.
+		'''
+		self.solver_.restore(fName)
+
+	##
+	#Copy weights from a net file
+	def copy_weights(self, fName):
+		'''
+			fName: the name of the file from which weights need to be copied.
+		'''
+		self.solver_.copy_trained_layers_from_netfile(fName)
 
 	##
 	# Solve	

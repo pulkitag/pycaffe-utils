@@ -1652,7 +1652,7 @@ class CaffeExperiment:
 							 defPrefix = 'caffenet', solverPrefix = 'solver',
 							 logPrefix = 'log', runPrefix = 'run', deviceId = 0,
 							 debugPrefix='debug', repNum = None, isTest=False,
-							 runSolver=True):
+							 runSolver=False):
 		'''
 			experiment directory: expDirPrefix  + dataExpName
 			snapshot   directory: snapDirPrefix + dataExpName
@@ -1723,6 +1723,7 @@ class CaffeExperiment:
 		self.net_       = None
 		self.solver_    = None
 		self.runSolver_ = runSolver
+		self.expMake_   = False
 
 	##
 	#initalize from solver file/SolverDef and netdef file/ProtoDef
@@ -1799,7 +1800,7 @@ class CaffeExperiment:
 
 	# Make the experiment. 
 	def make(self, modelFile=None, writeTest=False, testIter=None, modelIter=None,
-								 resumeIter=None):
+								 resumeIter=None, dumpLogFreq=1000):
 		'''
 			modelFile - file to finetune from if needed.
 			writeTest - if the test file needs to be written. 
@@ -1814,17 +1815,25 @@ class CaffeExperiment:
 			os.makedirs(self.dirs_['snap'])
 		
 		if resumeIter is not None:
-			self.expFile_.setup_resume(resumeIter)	
 			assert modelFile is None, "Model file cannot be specified with resume\
 							just specify the number of iterations"
- 
+			self.expFile_.setup_resume(resumeIter)	
 		self.expFile_.write_netdef()
 		self.expFile_.write_solver()
-		print "MODEL: %s" % modelFile
-		self.expFile_.write_run_train(modelFile)
-		if writeTest:
-			assert testIter is not None and modelIter is not None, 'Missing variables'
-			self.expFile_.write_run_test(modelIter, testIter)		
+	
+		if self.runSolver_:
+			self.solver_ = mp.MySolver.from_file(self.expFile_.solver_,
+											 dumpLogFreq=dumpLogFreq)
+			if modelFile is not None:
+				self.solver_.copy_weights(modelFile)
+		else: 	
+			#Command line mode
+			print "MODEL: %s" % modelFile
+			self.expFile_.write_run_train(modelFile)
+			if writeTest:
+				assert testIter is not None and modelIter is not None, 'Missing variables'
+				self.expFile_.write_run_test(modelIter, testIter)		
+		self.expMake_ = True
 
 	## Make the deploy file. 
 	def make_deploy(self, dataLayerNames, imSz, **kwargs):
@@ -1842,11 +1851,14 @@ class CaffeExperiment:
 
 	##
 	# Run the experiment
-	def run(self, runMode='cmdline'):
-		if runMode in ['cmdline']:
-			self.expFile_.run(runMode=runMode)
+	def run(self, recFreq=20):
+		if not self.expMake_:
+			print ('Make the experiment using exp.make(), before running, returning')
+			return
+		if self.runSolver_:
+			self.solver_.solve()
 		else:
-			
+			self.expFile_.run(runMode='cmdline')
 	
 	def get_test_accuracy(self):
 		return test_log2acc(self.files_['logTest'])
