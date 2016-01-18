@@ -589,7 +589,7 @@ class MySolver(object):
 		del self.net_
 
 	@classmethod
-	def from_file(cls, solFile, recFreq=20, dumpLogFreq=None):
+	def from_file(cls, solFile, recFreq=20, dumpLogFreq=None, logFile='default_log.pkl'):
 		'''
 			solFile    : solver prototxt from which to load the net
 			recFreq    : the frequency of recording
@@ -597,6 +597,7 @@ class MySolver(object):
 		'''
 		self = cls()
 		self.solFile_    = solFile
+		self.logFile_    = logFile
 		self.recFreq_    = recFreq
 		self.dumpLogFreq_= dumpLogFreq 
 		self.setup_solver()
@@ -667,12 +668,14 @@ class MySolver(object):
 
 	##
 	#Restore the solver from a previous state
-	def restore(self, fName):
+	def restore(self, fName, restoreIter=None):
 		'''
 			fName: the name of the file from which solver needs to be resumed.
 		'''
 		self.solver_.restore(fName)
-
+		if osp.exists(self.logFile_):
+			self.read_from_file(self.logFile_, maxIter=restoreIter)
+	
 	##
 	#Copy weights from a net file
 	def copy_weights(self, fName):
@@ -709,7 +712,7 @@ class MySolver(object):
 
 	##
 	#Dump the data to the file
-	def dump_to_file(self, fName):
+	def dump_to_file(self):
 		data = co.OrderedDict()
 		for ph in self.phase_:
 			data[ph] = co.OrderedDict()
@@ -726,22 +729,32 @@ class MySolver(object):
 					data[ph]['paramsUpdate'][p].append(self.paramVals[ph][i][p])
 		data['recFreq'] = self.recFreq_	
 		data['recIter'] = self.recIter_
-		pickle.dump(data, open(fName, 'w'))
+		pickle.dump(data, open(self.logFile_, 'w'))
 
 	##
 	#Read the logging data from file
-	def read_from_file(self, fName):
+	def read_from_file(self, fName, maxIter=None):
+	'''
+		fName  : File from which values need to be read
+		maxIter: read until maxIter 
+	'''
 		data = pickle.load(open(fName, 'r'))
+		self.recIter_ = data['recIter']
+		if maxIter is not None:
+			idx = np.where(self.recIter_ <= maxIter)[0][-1]
+			idx = min(idx + 1, len(self.recIter_))
+		else:
+			idx = len(self.recIter_)
+		self.recIter_ = self.recIter_[idx]
 		for ph in self.phase_:
 			for k, b in enumerate(data[ph]['blobs'].keys()):
-				self.featVals[ph][b] = data[ph]['blobs'][b]
+				self.featVals[ph][b] = data[ph]['blobs'][b][0:idx]
 				assert b == self.blobNames_[ph][k]
 			for k, p in enumerate(data[ph]['params'].keys()):
 				for i in range(2):
-					self.paramVals[ph][i][p]   = data[ph]['params'][p][i]
-					self.paramUpdate[ph][i][p] = data[ph]['paramsUpdate'][p][i] 
+					self.paramVals[ph][i][p]   = data[ph]['params'][p][i][0:idx]
+					self.paramUpdate[ph][i][p] = data[ph]['paramsUpdate'][p][i][0:idx]
 					assert p == self.paramNames_[ph][k]
-		self.recIter_ = data['recIter']
 
 	##
 	# Return pointer to layer

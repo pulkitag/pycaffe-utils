@@ -4,28 +4,324 @@ import my_pycaffe_utils as mpu
 from easydict import EasyDict as edict
 import copy
 import other_utils as ou
+import pickle
+
+def get_default_net_prms(**kwargs):
+	dArgs = edict()
+	#Name of the net which will be constructed
+	dArgs.netName = 'alexnet'
+	#For layers below lrAbove, learning rate is set to 0
+	dArgs.lrAbove     = None
+	#If weights from a pretrained net are to be used
+	dArgs.preTrainNet = None
+	#The base proto from which net will be constructed
+	dArgs.baseNetDefProto = 'deploy.prototxt'
+	#Batch size
+	dArgs.batchsize   = 128
+	#runNum
+	dArgs.runNum      = 0
+	dArgs = mpu.get_defaults(kwargs, dArgs, False)
+	dArgs.expStr = 'nwPrms' + ou.hash_dict_str(dArgs)
+	return dArgs
 
 
-class NetPrms():
-	def __init__(self, dataPrms=edict(), otherPrms=edict(),
-					nwPrms=edict(), preProcPrms=edict()):
-		#The parameters on which the data depends
-		self.dataPrms  = dataPrms
-		#The parameters which control the learning (not the neural net hyperparameters
-		#but they also go in the data layer)
-		self.otherPrms = otherPrms
-		#Parameters that define the net architecture
-		self.nwPrms    = nwPrms
-		#Parametes that define data preprocessing in the net
-		self.preProcPrms = preProcPrms
-		self.expStr      = self.generate_hash()
+def get_siamese_net_prms(**kwargs):
+	dArgs = get_default_net_prms()
+	del dArgs['expStr']
+	#Layers at which the nets are to be concatenated
+	dArgs.concatLayer = 'fc6'
+	#If dropouts should be used in the concatenation layer
+	dArgs.concatDrop  = False
+	#Number of filters in concatenation layer
+	dArgs.concatSz    = None
+	#If an extra FC layer needs to be added
+	dArgs.extraFc     = None
+	dArgs = mpu.get_defaults(kwargs, dArgs, False)
+	dArgs.expStr = 'nwPrms' + ou.hash_dict_str(dArgs)
+	return dArgs
+
+
+def get_siamese_window_net_prms(**kwargs):
+	dArgs = get_siamese_net_prms()
+	del dArgs['expStr']
+	#Size of input image
+	dArgs.imSz = 227
+	#If random cropping is to be used	
+	dArgs.randCrop = False
+	#If gray scale images need to be used
+	dArgs.isGray   = False
+	dArgs = mpu.get_defaults(kwargs, dArgs, False)
+	dArgs.expStr = 'nwPrms' + ou.hash_dict_str(dArgs)
+	return dArgs
+
+'''
+Defining get_custom_net_prms()
+def get_custom_net_prms(**kwargs):
+	dArgs = get_your_favorite_prms()
+	del dArgs['expStr']
+	##DEFINE NEW PROPERTIES##
+	dArgs.myNew = value
+	################
+	dArgs = mpu.get_defaults(kwargs, dArgs, False)
+	dArgs.expStr = 'nwPrms' + ou.hash_dict_str(dArgs)
+	return dArgs
+'''
+
+##
+# Parameters that specify the learning
+def get_default_solver_prms(**kwargs):
+	'''
+		Refer to caffe.proto for a description of the
+		variables. 
+	'''	
+	dArgs = edict()
+	dArgs.iter_size   = 1
+	dArgs.max_iter    = 250000
+	dArgs.base_lr   = 0.001
+	dArgs.lr_policy   = '"step"' 
+	dArgs.stepsize    = 20000	
+	dArgs.gamma     = 0.5
+	dArgs.weight_decay = 0.0005
+	dArgs.clip_gradients = -1
+	#Momentum
+	dArgs.momentum  = 0.9
+	#Other
+	dArgs.regularization_type = '"L2"'
+	dArgs.random_seed = -1
+	#Testing info
+	dArgs.test_iter     = 100
+	dArgs.test_interval = 1000
+	dArgs.snapshot      = 2000	
+	dArgs.display       = 20
+	#Update parameters
+	dArgs        = mpu.get_defaults(kwargs, dArgs, False)
+	dArgs.expStr = ou.hash_dict_str(dArgs, 
+								 ignoreKeys=['test_iter',  'test_interval',
+								 'snapshot', 'display'])
+	return dArgs 
+
+
+def get_caffe_prms(nwFn=None, nwPrms={}, solFn=None,
+						solPrms={}, resumeIter=None, baseDefDir=''):
+	if nwFn is None:
+		nwFn = get_default_net_prms
+	if solFn is None:
+		solFn = get_default_solver_prms
+	nwPrms  = nwFn(nwPrms)
+	solPrms = solFn(solPrms) 
+	cPrms   = edict()
+	cPrms.baseDefDir = baseDefDir
+	cPrms.nwPrms     = copy.deepcopy(nwPrms)
+	cPrms.lrPrms     = copy.deepcopy(solPrms)	
+	cPrms.resumeIter = resumeIter
+	expStr = cPrms.nwPrms.expStr + cPrms.lrPrms.expStr
+	del solPrms['expStr']
+	cPrms.solver = mpu.make_solver(**solPrms)	
+	cPrms.expStr = expStr
+	return cPrms	
+
+##
+# Programatically make a Caffe Experiment. 
+class CaffeSolverExperiment:
+	def __init__(self, prms, cPrms):
+		'''
+			prms:          dict containing key 'expName' and 'paths'
+										 contains dataset specific parameters
+			cPrms:         dict contraining 'expStr', 'resumeIter', 'nwPrms'
+									 	 contains net and sovler spefici parameters
+		'''
+		self.dataExpName_  = prms['expName']
+		self.caffeExpName_ = cPrms['expStr']
+		expDirPrefix       = prms.paths.exp.dr
+		snapDirPredix      = prms.paths.exp.snapshot.dr
+		#Relevant directories. 
+		self.dirs_  = {}
+		self.dirs_['exp']  = os.path.join(expDirPrefix,  dataExpName)
+		self.dirs_['snap'] = os.path.join(snapDirPrefix, dataExpName)  
+		self.resumeIter_ = cPrms.resumeIter
+		self.runNum_     = cPrms.nwPrms.runNum 
+
+		solverFile    = caffeExpName + '_solver.prototxt'
+		defFile       = caffeExpName + '_netdef.prototxt'
+		defDeployFile = caffeExpName + '_netdef_deploy.prototxt'
+		defRecFile    = caffeExpName + '_netdef_reconstruct.prototxt'
+		logFile       = caffeExpName + '_log.pkl'
+		snapPrefix    = caffeExpName + '_caffenet_run%d' % self.runNum_ 
+
+		self.files_   = {}
+		self.files_['solver'] = os.path.join(self.dirs_['exp'], solverFile) 
+		self.files_['netdef'] = os.path.join(self.dirs_['exp'], defFile)
+		self.files_['netdefDeploy'] = os.path.join(self.dirs_['exp'], defDeployFile) 
+		self.files_['netdefRec']    = os.path.join(self.dirs_['exp'], defRecFile) 
+		self.files_['log'] = os.path.join(self.dirs_['exp'], logFile % 'train')
+		#snapshot
+		self.files_['snap'] = os.path.join(snapDirPrefix, dataExpName,
+													snapPrefix + '_iter_%d.caffemodel')  
+		self.snapPrefix_    = '"%s"' % os.path.join(snapDirPrefix, dataExpName, snapPrefix)		
+		self.snapPrefix_    = ou.chunk_filename(self.snapPrefix_, maxLen=242)
+		#Chunk all the filnames if needed
+		for key in self.files_.keys():
+			self.files_[key] = ou.chunk_filename(self.files_[key])
+
+		#Store the solver and the net definition files
+		self.expFile_   = edict()
+		self.expFile_.solDef_ = copy.deepcopy(cPrms.solver)
+		self.setup_solver()
+		self.expFile_.netDef_ = mpu.ProtoDef(osp.join(cPrms.baseDefDir,
+														cPrms.nwPrms.baseNetDefProto)) 
+		#Other class parameters
+		self.solver_    = None
+		self.expMake_   = False
+
+	def setup_solver(self):
+		self.solDef_.add_property('device_id', 0)
+		self.solDef_.set_property('net', '"%s"' % self.files_['netdef'])
+		self.solDef_.set_property('snapshot_prefix', self.snapPrefix_)	
 	
-	def generate_hash(self):
-		expStr = '%s' % ou.hash_dict_str(self.dataPrms)
-		expStr = expStr + '-%s' % ou.hash_dict_str(self.otherPrms)
-		expStr = expStr + '-%s' % ou.hash_dict_str(self.nwPrms)
-		expStr = expStr + '-%s' % ou.hash_dict_str(self.preProcPrms)
-		self.expStr = expStr
+	##
+	def del_layer(self, layerName):
+		self.expFile_.netDef_.del_layer(layerName) 
+
+	##
+	def del_all_layers_above(self, layerName):
+		self.expFile_.netDef_.del_all_layers_above(layerName)
+
+	## Get layer property
+	def get_layer_property(self, layerName, propName, **kwargs):
+		return self.expFile_.netDef_.get_layer_property(layerName, propName, **kwargs)
+
+	## Set the property. 	
+	def set_layer_property(self, layerName, propName, value, **kwargs):
+		self.expFile_.netDef_.set_layer_property(layerName, propName, value, **kwargs)
+
+	##
+	def add_layer(self, layerName, layer, phase):
+		self.expFile_.netDef_.add_layer(layerName, layer, phase)
+	##
+	# Get the layerNames from the type of the layer. 
+	def get_layernames_from_type(self, layerType, phase='TRAIN'):
+		return self.expFile_.netDef_.get_layernames_from_type(layerType, phase=phase)
+
+	##
+	def get_snapshot_name(self, numIter=10000, getSolverFile=False):
+		'''
+			Find the name with which models are being stored. 
+		'''
+		snapshot   = self.solDef_.get_property('snapshot_prefix')
+		#_iter_%d.caffemodel is added by caffe while snapshotting. 
+		snapshotName = snapshot[1:-1] + '_iter_%d.caffemodel'
+		snapshotName = ou.chunk_filename(snapshotName)
+		#solver file
+		solverName   = snapshot[1:-1] + '_iter_%d.solverstate'
+		solverName   = ou.chunk_filename(snapshotName)	
+		if getSolverFile:
+			return solverName
+		else:	
+			return snapshot
+
+
+	## Only finetune the layers that are above ( and including) layerName
+	def finetune_above(self, layerName):
+		self.expFile_.netDef_.set_no_learning_until(layerName)	
+
+	## All layernames
+	def get_all_layernames(self, phase='TRAIN'):
+		return self.expFile_.netDef_.get_all_layernames(phase=phase)
+
+	## Get the top name of the last layer
+	def get_last_top_name(self):
+		return self.expFile_.netDef_.get_last_top_name()
+
+	##Setup the network
+	def setup_net(self, **kwargs):
+		if self.net_ is None:
+			self.make(**kwargs)
+			snapName  = self.get_snapshot_name(kwargs['modelIter'])
+			self.net_ = mp.MyNet(self.files_['netdef'], snapName)
+
+	##Get weights from a layer.
+	def get_weights(self, layerName, **kwargs):
+		self.setup_net(**kwargs)
+		return self.net_.net.params[layerName][0].data 
+
+
+	# Make the experiment. 
+	def make(self, deviceId=0, dumpLogFreq=1000):
+		'''
+			modelFile - file to finetune from if needed.
+			writeTest - if the test file needs to be written. 
+			if writeTest is True:
+				testIter :  For number of iterations the test needs to be run.
+				modelIter:  Used for estimating the model used for running the tests. 
+			resumeIter: If the experiment needs to be resumed. 
+		'''
+		self.expFile_.solDef_.set_property('device_id', deviceId)
+		#Write the solver and the netdef file
+		if not os.path.exists(self.dirs_['exp']):
+			os.makedirs(self.dirs_['exp'])
+		if not os.path.exists(self.dirs_['snap']):
+			os.makedirs(self.dirs_['snap'])
+		self.expFile_.netDef_.write(self.files_['netdef'])
+		self.expFile_.solDef_.write(self.files_['solver'])
+		#Create the solver	
+		self.solver_ = mp.MySolver.from_file(self.expFile_.solver_,
+									 dumpLogFreq=dumpLogFreq, logFile=self.files_['log'])
+		if self.preTrainNet_ is not None:
+			assert (self.resumeIter_ is None)
+			self.solver_.copy_weights(self.preTrainNet_)
+		if self.resumeIter_ is not None:
+			solverStateFile = self.get_snapshot_name(snapName, getSolverFile=True)
+			self.solver_.restore(solverStateFile)
+	
+	## Make the deploy file. 
+	def make_deploy(self, dataLayerNames, imSz, **kwargs):
+		self.deployProto_ = ProtoDef.deploy_from_proto(self.expFile_.netDef_,
+									 dataLayerNames=dataLayerNames, imSz=imSz, **kwargs)
+		self.deployProto_.write(self.files_['netdefDeploy'])
+	
+	## Get the deploy proto
+	def get_deploy_proto(self):	
+		return self.deployProto_
+
+	## Get deploy file
+	def get_deploy_file(self):
+		return self.files_['netdefDeploy']		
+
+	##
+	# Run the experiment
+	def run(self, recFreq=20):
+		if not self.expMake_:
+			print ('Make the experiment using exp.make(), before running, returning')
+			return
+		self.solver_.solve()
+	
+	def get_test_accuracy(self):
+		print ('NOT IMPLEMENTED YET')
+
+
+	
+
+def get_caffe_prms_old(nwPrms, lrPrms, finePrms=None, 
+									 isScratch=True, deviceId=1,
+									 runNum=0, resumeIter=0): 
+	caffePrms = edict()
+	caffePrms.deviceId  = deviceId
+	caffePrms.isScratch = isScratch
+	caffePrms.nwPrms    = copy.deepcopy(nwPrms)
+	caffePrms.lrPrms    = copy.deepcopy(lrPrms)
+	caffePrms.finePrms  = copy.deepcopy(finePrms)
+	caffePrms.resumeIter = resumeIter
+
+	expStr = nwPrms.expStr + '/' + lrPrms.expStr
+	if finePrms is not None:
+		expStr = expStr + '/' + finePrms.expStr
+	if runNum > 0:
+		expStr = expStr + '_run%d' % runNum
+	caffePrms['expStr'] = expStr
+	caffePrms['solver'] = lrPrms.solver
+	return caffePrms
+
+
 
 ##
 # Parameters required to specify the n/w architecture
