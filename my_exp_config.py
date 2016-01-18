@@ -1,5 +1,7 @@
+import os
 import os.path as osp
 import numpy as np
+import my_pycaffe as mp
 import my_pycaffe_utils as mpu
 from easydict import EasyDict as edict
 import copy
@@ -17,7 +19,7 @@ def get_default_net_prms(**kwargs):
 	#The base proto from which net will be constructed
 	dArgs.baseNetDefProto = 'deploy.prototxt'
 	#Batch size
-	dArgs.batchsize   = 128
+	dArgs.batchsize   = None
 	#runNum
 	dArgs.runNum      = 0
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
@@ -75,6 +77,7 @@ def get_default_solver_prms(**kwargs):
 		variables. 
 	'''	
 	dArgs = edict()
+	dArgs.baseSolDefFile = None
 	dArgs.iter_size   = 1
 	dArgs.max_iter    = 250000
 	dArgs.base_lr   = 0.001
@@ -98,24 +101,26 @@ def get_default_solver_prms(**kwargs):
 	dArgs.expStr = ou.hash_dict_str(dArgs, 
 								 ignoreKeys=['test_iter',  'test_interval',
 								 'snapshot', 'display'])
+	dArgs.expStr = 'solPrms' + dArgs.expStr
 	return dArgs 
 
 
-def get_caffe_prms(nwFn=None, nwPrms={}, solFn=None,
+def get_solver_caffe_prms(nwFn=None, nwPrms={}, solFn=None,
 						solPrms={}, resumeIter=None, baseDefDir=''):
 	if nwFn is None:
 		nwFn = get_default_net_prms
 	if solFn is None:
 		solFn = get_default_solver_prms
-	nwPrms  = nwFn(nwPrms)
-	solPrms = solFn(solPrms) 
+	nwPrms  = nwFn(**nwPrms)
+	solPrms = solFn(**solPrms) 
 	cPrms   = edict()
 	cPrms.baseDefDir = baseDefDir
 	cPrms.nwPrms     = copy.deepcopy(nwPrms)
 	cPrms.lrPrms     = copy.deepcopy(solPrms)	
 	cPrms.resumeIter = resumeIter
-	expStr = cPrms.nwPrms.expStr + cPrms.lrPrms.expStr
+	expStr = osp.join(cPrms.nwPrms.expStr, cPrms.lrPrms.expStr) + '/'
 	del solPrms['expStr']
+	del solPrms['baseSolDefFile']
 	cPrms.solver = mpu.make_solver(**solPrms)	
 	cPrms.expStr = expStr
 	return cPrms	
@@ -130,16 +135,17 @@ class CaffeSolverExperiment:
 			cPrms:         dict contraining 'expStr', 'resumeIter', 'nwPrms'
 									 	 contains net and sovler spefici parameters
 		'''
-		self.dataExpName_  = prms['expName']
-		self.caffeExpName_ = cPrms['expStr']
+		dataExpName        = prms['expName']
+		caffeExpName       = cPrms['expStr']
 		expDirPrefix       = prms.paths.exp.dr
-		snapDirPredix      = prms.paths.exp.snapshot.dr
+		snapDirPrefix      = prms.paths.exp.snapshot.dr
 		#Relevant directories. 
 		self.dirs_  = {}
-		self.dirs_['exp']  = os.path.join(expDirPrefix,  dataExpName)
-		self.dirs_['snap'] = os.path.join(snapDirPrefix, dataExpName)  
-		self.resumeIter_ = cPrms.resumeIter
-		self.runNum_     = cPrms.nwPrms.runNum 
+		self.dirs_['exp']  = osp.join(expDirPrefix,  dataExpName)
+		self.dirs_['snap'] = osp.join(snapDirPrefix, dataExpName)  
+		self.resumeIter_  = cPrms.resumeIter
+		self.runNum_      = cPrms.nwPrms.runNum 
+		self.preTrainNet_ = cPrms.nwPrms.preTrainNet
 
 		solverFile    = caffeExpName + '_solver.prototxt'
 		defFile       = caffeExpName + '_netdef.prototxt'
@@ -149,15 +155,15 @@ class CaffeSolverExperiment:
 		snapPrefix    = caffeExpName + '_caffenet_run%d' % self.runNum_ 
 
 		self.files_   = {}
-		self.files_['solver'] = os.path.join(self.dirs_['exp'], solverFile) 
-		self.files_['netdef'] = os.path.join(self.dirs_['exp'], defFile)
-		self.files_['netdefDeploy'] = os.path.join(self.dirs_['exp'], defDeployFile) 
-		self.files_['netdefRec']    = os.path.join(self.dirs_['exp'], defRecFile) 
-		self.files_['log'] = os.path.join(self.dirs_['exp'], logFile % 'train')
+		self.files_['solver'] = osp.join(self.dirs_['exp'], solverFile) 
+		self.files_['netdef'] = osp.join(self.dirs_['exp'], defFile)
+		self.files_['netdefDeploy'] = osp.join(self.dirs_['exp'], defDeployFile) 
+		self.files_['netdefRec']    = osp.join(self.dirs_['exp'], defRecFile) 
+		self.files_['log'] = osp.join(self.dirs_['exp'], logFile)
 		#snapshot
-		self.files_['snap'] = os.path.join(snapDirPrefix, dataExpName,
+		self.files_['snap'] = osp.join(snapDirPrefix, dataExpName,
 													snapPrefix + '_iter_%d.caffemodel')  
-		self.snapPrefix_    = '"%s"' % os.path.join(snapDirPrefix, dataExpName, snapPrefix)		
+		self.snapPrefix_    = '"%s"' % osp.join(snapDirPrefix, dataExpName, snapPrefix)		
 		self.snapPrefix_    = ou.chunk_filename(self.snapPrefix_, maxLen=242)
 		#Chunk all the filnames if needed
 		for key in self.files_.keys():
@@ -174,9 +180,9 @@ class CaffeSolverExperiment:
 		self.expMake_   = False
 
 	def setup_solver(self):
-		self.solDef_.add_property('device_id', 0)
-		self.solDef_.set_property('net', '"%s"' % self.files_['netdef'])
-		self.solDef_.set_property('snapshot_prefix', self.snapPrefix_)	
+		self.expFile_.solDef_.add_property('device_id', 0)
+		self.expFile_.solDef_.set_property('net', '"%s"' % self.files_['netdef'])
+		self.expFile_.solDef_.set_property('snapshot_prefix', self.snapPrefix_)	
 	
 	##
 	def del_layer(self, layerName):
@@ -248,23 +254,18 @@ class CaffeSolverExperiment:
 	# Make the experiment. 
 	def make(self, deviceId=0, dumpLogFreq=1000):
 		'''
-			modelFile - file to finetune from if needed.
-			writeTest - if the test file needs to be written. 
-			if writeTest is True:
-				testIter :  For number of iterations the test needs to be run.
-				modelIter:  Used for estimating the model used for running the tests. 
-			resumeIter: If the experiment needs to be resumed. 
+			deviceId: the gpu on which to run
 		'''
 		self.expFile_.solDef_.set_property('device_id', deviceId)
 		#Write the solver and the netdef file
-		if not os.path.exists(self.dirs_['exp']):
+		if not osp.exists(self.dirs_['exp']):
 			os.makedirs(self.dirs_['exp'])
-		if not os.path.exists(self.dirs_['snap']):
+		if not osp.exists(self.dirs_['snap']):
 			os.makedirs(self.dirs_['snap'])
 		self.expFile_.netDef_.write(self.files_['netdef'])
 		self.expFile_.solDef_.write(self.files_['solver'])
 		#Create the solver	
-		self.solver_ = mp.MySolver.from_file(self.expFile_.solver_,
+		self.solver_ = mp.MySolver.from_file(self.files_['solver'],
 									 dumpLogFreq=dumpLogFreq, logFile=self.files_['log'])
 		if self.preTrainNet_ is not None:
 			assert (self.resumeIter_ is None)
@@ -272,6 +273,7 @@ class CaffeSolverExperiment:
 		if self.resumeIter_ is not None:
 			solverStateFile = self.get_snapshot_name(snapName, getSolverFile=True)
 			self.solver_.restore(solverStateFile)
+		self.expMake_ = True
 	
 	## Make the deploy file. 
 	def make_deploy(self, dataLayerNames, imSz, **kwargs):

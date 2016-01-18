@@ -697,6 +697,8 @@ class MySolver(object):
 				self.record_feats_params(phases=['test'])
 				self.recIter_['test'].append(self.solver_.iter)
 			self.solver_.step(1)
+			if np.mod(self.solver_.iter, self.dumpLogFreq_)==0:
+				self.dump_to_file()
 	##
 	#Record the data
 	def record_feats_params(self, phases=None):
@@ -734,10 +736,10 @@ class MySolver(object):
 	##
 	#Read the logging data from file
 	def read_from_file(self, fName, maxIter=None):
-	'''
+		'''
 		fName  : File from which values need to be read
 		maxIter: read until maxIter 
-	'''
+		'''
 		data = pickle.load(open(fName, 'r'))
 		self.recIter_ = data['recIter']
 		if maxIter is not None:
