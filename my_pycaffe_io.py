@@ -2,7 +2,10 @@
 #  IO operations. 
 #
 
-import h5py as h5
+try:
+	import h5py as h5
+except:
+	print ('WARNING: h5py not found, some functions may not work')
 import numpy as np
 import my_pycaffe as mp
 import caffe

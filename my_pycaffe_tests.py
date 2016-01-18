@@ -4,10 +4,13 @@
 
 import my_pycaffe as mp
 import my_pycaffe_utils as mpu
-import h5py
 import numpy as np
 import pdb
 import os
+try:
+	import h5py
+except:
+	print ('WARNING: h5py not found, some functions may not work')
 
 ##
 # Test code for Zeiler-Fergus Saliency. 

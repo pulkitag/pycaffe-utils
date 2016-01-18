@@ -14,10 +14,12 @@ import collections as co
 import other_utils as ou
 import shutil
 import copy
-import h5py as h5
 from pycaffe_config import cfg
 import scipy.misc as scm
-
+try:
+	import h5py as h5
+except:
+	print ('WARNING: h5py not found, some functions may not work')
 CAFFE_PATH = cfg.CAFFE_PATH
 
 def zf_saliency(net, imBatch, numOutputs, opName, ipName='data', stride=2, patchSz=11):

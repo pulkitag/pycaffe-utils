@@ -3,7 +3,6 @@
 #
 
 import numpy as np
-import h5py
 import caffe
 import pdb
 import matplotlib.pyplot as plt
@@ -14,6 +13,11 @@ from easydict import EasyDict as edict
 import my_pycaffe_utils as mpu
 import pickle
 import collections as co
+try:
+	import h5py
+except:
+	print ('WARNING: h5py not found, some functions may not work')
+	
 
 class layerSz:
 	def __init__(self, stride, filterSz):
