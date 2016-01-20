@@ -29,3 +29,17 @@ for r in range(0, maxIter, saveIter):
 </code></pre>
 
 The logged values can be easily plotted using, `sol.plot()`
+
+
+Creating a Siamese prototxt file for Caffe
+-------------------------
+<pre><code>
+import my_pycaffe_utils as mpu
+fName = 'deploy.prototxt'
+pDef  = mpu.ProtoDef(fName)
+#Make a siamese protodef by duplicating layers between 'conv1' and 'conv5', leave
+#other layers as such.
+siameseDef = pDef.get_siamese('conv1', 'conv5')
+#Save the siamese file
+siameseDef.write('siamese.prototxt')
+</code></pre>
