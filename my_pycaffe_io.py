@@ -2,7 +2,10 @@
 #  IO operations. 
 #
 
-#import h5py as h5
+try:
+	import h5py as h5
+except:
+	print ('WARNING: h5py not found, some functions may not work')
 import numpy as np
 import my_pycaffe as mp
 import caffe
@@ -15,6 +18,7 @@ import scipy.io as sio
 import copy
 from pycaffe_config import cfg
 from os import path as osp
+import other_utils as ou
 
 if not cfg.IS_EC2:
 	#import matlab.engine as men
@@ -205,18 +209,31 @@ class DoubleDbSaver:
 
 
 class DbReader:
-	def __init__(self, dbName, isLMDB=True, readahead=True):
+	def __init__(self, dbName, isLMDB=True, readahead=True, wrapAround=False):
+		'''
+				wrapAround: False - return None, None if end of file is reached
+										True  - move to the first element
+		'''
 		#For large LMDB set readahead to be False
 		self.db_     = lmdb.open(dbName, readonly=True, readahead=readahead)
 		self.txn_    = self.db_.begin(write=False) 
 		self.cursor_ = self.txn_.cursor()		
 		self.nextValid_ = True
+		self.wrap_      = wrapAround
 		self.cursor_.first()
 
 	def __del__(self):
 		self.txn_.commit()
 		self.db_.close()
-		
+	
+	#Maintain the appropriate variables
+	def _maintain(self):
+		if self.wrap_:
+			if not self.nextValid_:
+				print ('Going to first element of lmdb')
+				self.cursor_.first()
+				self.nextValid_ = True
+
 	def read_next(self):
 		if not self.nextValid_:
 			return None, None
@@ -227,8 +244,10 @@ class DbReader:
 			data   = caffe.io.datum_to_array(datStr)
 			label  = datStr.label
 		self.nextValid_ = self.cursor_.next()
+		self._maintain()
 		return data, label
 
+	#Read a batch of elements
 	def read_batch(self, batchSz):
 		data, label = [], []
 		count = 0
@@ -261,9 +280,26 @@ class DbReader:
 				countFlag = False
 		return countArr				
 
+	#Get number of elements
 	def get_count(self):
-		return self.db_.stat()['entries']
+		return int(self.db_.stat()['entries'])
+
+	#Skip one element
+	def skip(self):
+		isNext = self.cursor_.next()
+		if not isNext:
+			self.cursor_.first()
+		self._maintain()
 	
+	#Skip in reverse
+	def skip_reverse(self):
+		isPrev = self.cursor_.prev()
+		#Prev skip will not be possible if we are the first element
+		if not isPrev:
+			self.cursor_.last()
+		self._maintain()
+	
+	#close
 	def close(self):
 		self.txn_.commit()
 		self.db_.close()
@@ -285,12 +321,21 @@ class SiameseDbReader(DbReader):
 			 
 ##
 # Read two LMDBs simultaneosuly
-class DoubleDbReader:
-	def __init__(self, dbNames, isLMDB=True, readahead=True):
+class DoubleDbReader(object):
+	def __init__(self, dbNames, isLMDB=True, readahead=True, 
+							 wrapAround=False, isMulti=False):
+		'''
+				wrapAround: False - return None, None if end of file is reached
+										True  - move to the first element
+				isMulti   : False - read only two dbs v(flag for backward compatibility)
+									  True  - read from arbitrary number of dbs
+		'''
 		#For large LMDB set readahead to be False
-		self.dbs_ = []
+		self.dbs_     = []
+		self.isMulti_ = isMulti
 		for d in dbNames:
-			self.dbs_.append(DbReader(d, isLMDB=isLMDB, readahead=readahead))	
+			self.dbs_.append(DbReader(d, isLMDB=isLMDB, readahead=readahead,
+												wrapAround=wrapAround))	
 
 	def __del__(self):
 		for db in self.dbs_:
@@ -301,7 +346,10 @@ class DoubleDbReader:
 		for db in self.dbs_:
 			dat,_ = db.read_next()
 			data.append(dat)
-		return data[0], data[1]
+		if self.isMulti_:
+			return data
+		else:
+			return data[0], data[1]
 
 	def read_batch(self, batchSz):
 		data = []
@@ -316,11 +364,22 @@ class DoubleDbReader:
 			dat,lb = db.read_batch(batchSz)
 			data.append(dat)
 			label.append(lb)
-		return data[0], data[1], label[0], label[1]
+		if self.isMulti_:
+			return data, label
+		else:
+			return data[0], data[1], label[0], label[1]
 
 	def close(self):
 		for db in self.dbs_:
 			db.close()
+
+##
+# Read multiple LMDBs simultaneosuly
+class MultiDbReader(DoubleDbReader):
+	def __init__(self, dbNames, isLMDB=True, readahead=True, 
+							 wrapAround=False):
+		DoubleDbReader.__init__(self, dbNames, isLMDB=isLMDB,
+			readahead=readahead, wrapAround=wrapAround, isMulti=True)
 
 ##
 # For reading generic window reader. 
@@ -350,16 +409,25 @@ class GenericWindowReader:
 		return imDat, lbls
 		
 	#Get the processed images and labels
-	def read_next_processed(self, rootFolder):
+	def read_next_processed(self, rootFolder, returnName=False):
 		imDat, lbls = self.read_next()
-		ims = []
+		ims     = []
+		imNames, outNames = [], []
 		for l in imDat:
 			imName, ch, h, w, x1, y1, x2, y2 = l.strip().split()
 			imName = osp.join(rootFolder, imName)
 			x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
 			im = scm.imread(imName)
 			ims.append(im[y1:y2, x1:x2,:])
-		return ims, lbls[0]	
+			imNames.append(imName)
+			#Generate an outprefix that maybe used to save the images
+			_, fName  = osp.split(imName)
+			ext       = fName[-4:]	
+			outNames.append(fName[:-4] + '-%d-%d-%d-%d%s' % (x1,y1,x2,y2,ext))
+		if returnName:
+			return ims, lbls[0], imNames, outNames
+		else:
+			return ims, lbls[0]	
 	
 	def get_all_labels(self):
 		readFlag = True
@@ -383,6 +451,29 @@ class GenericWindowReader:
 	def close(self):
 		self.fid_.close()
 		self.open_ = False
+
+	#Save image crops
+	def save_crops(self, rootFolder, tgtDir, numIm=None):
+		'''
+			rootFolder: the root folder for the window file
+			tgtDir    : the directory where the images should be saved
+		'''
+		count    = 0
+		readFlag = True
+		ou.mkdir(tgtDir)	
+		while readFlag:	
+			ims, _, imNames, oNames = self.read_next_processed(rootFolder,
+																 returnName=True)
+			for im, name, oName in zip(ims, imNames, oNames):
+				svName   = osp.join(tgtDir, oName)
+				scm.imsave(svName, im)
+			if self.is_eof():
+				readFlag = False
+			count += 1
+			if numIm is not None and count >= numIm:
+				readFlag = False
+
+	
 
 ##
 # For writing generic window file layers. 
@@ -728,6 +819,7 @@ def matconvnet_to_caffemodel(inFile, outFile):
 	print outFile
 	net.save(outFile)
 
+	
 
 #Converts the weights stored in a .mat file into format
 #for matconvnet. 

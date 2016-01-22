@@ -14,9 +14,12 @@ import collections as co
 import other_utils as ou
 import shutil
 import copy
-#import h5py as h5
 from pycaffe_config import cfg
-
+import scipy.misc as scm
+try:
+	import h5py as h5
+except:
+	print ('WARNING: h5py not found, some functions may not work')
 CAFFE_PATH = cfg.CAFFE_PATH
 
 def zf_saliency(net, imBatch, numOutputs, opName, ipName='data', stride=2, patchSz=11):
@@ -146,7 +149,8 @@ class ILSVRC12Reader:
 
 	def read(self):
 		imFile = self.imFile_ % (self.count_ + 1)
-		im     = mp.caffe.io.load_image(imFile)
+		#im     = mp.caffe.io.load_image(imFile)
+		im     = scm.imread(imFile)
 		lb     = self.labels_[self.count_]	
 		syn    = self.synsets_[lb]
 		words  = self.words_[syn]
@@ -294,7 +298,10 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 		layerDef[ipKey]['bias_filler']['value']  = str(1.)
 
 	elif layerType == 'Convolution':
-		layerDef['top']    = '"%s"' % layerName
+		if kwargs.has_key('top'):
+			layerDef['top'] = '"%s"' % kwargs['top']
+		else:
+			layerDef['top']    = '"%s"' % layerName
 		layerDef['param'] = get_proto_dict('param_w', 'param', **kwargs)
 		paramDup = make_key('param', layerDef.keys())
 		layerDef[paramDup] = get_proto_dict('param_b', paramDup, **kwargs)
@@ -331,9 +338,27 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 			topName = layerName
 		layerDef['top'] = '"%s"' % topName
 		layerDef['pooling_param'] = {}
-		layerDef['pooling_param']['pool'] = 'MAX'
+		if kwargs.has_key('pool'):
+			poolType = kwargs['pool']
+		else:
+			poolType = 'MAX'
+		layerDef['pooling_param']['pool'] = poolType
 		layerDef['pooling_param']['kernel_size'] = kwargs['kernel_size']
 		layerDef['pooling_param']['stride']      = kwargs['stride']
+		if kwargs.has_key('pad'):
+			layerDef['pooling_param']['pad'] = kwargs['pad']
+	
+	elif layerType == 'LRN':
+		if kwargs.has_key('top'):
+			topName = kwargs['top']
+		else:
+			topName = layerName
+		layerDef['top'] = '"%s"' % topName
+		layerDef['lrn_param'] = {}
+		layerDef['lrn_param']['local_size'] = kwargs['local_size']
+		layerDef['lrn_param']['alpha']      = kwargs['alpha']
+		layerDef['lrn_param']['beta'] = kwargs['beta']
+		layerDef['lrn_param']['k']    = kwargs['k']
 
 	elif layerType=='Silence':
 		#Nothing to be done
@@ -387,11 +412,19 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 	elif layerType == 'Concat':
 		assert kwargs.has_key('bottom2')
 		assert kwargs.has_key('concat_dim')
-		bottom2 = make_key('bottom', layerDef.keys())
-		layerDef[bottom2] = '"%s"' % kwargs['bottom2']
+		if type(kwargs['bottom2'])==list:
+			for bot in kwargs['bottom2']:
+				bottom2 = make_key('bottom', layerDef.keys())
+				layerDef[bottom2] = '"%s"' % bot
+		else:
+			bottom2 = make_key('bottom', layerDef.keys())
+			layerDef[bottom2] = '"%s"' % kwargs['bottom2']
 		layerDef['concat_param'] = co.OrderedDict()
 		layerDef['concat_param']['concat_dim'] = kwargs['concat_dim']
-		layerDef['top']   = '"%s"' % layerName
+		if kwargs.has_key('top'):
+			layerDef['top']   = '"%s"' % kwargs['top']
+		else:
+			layerDef['top']   = '"%s"' % layerName
 
 	elif layerType in ['DeployData']:
 		layerDef['input'] = '"%s"' % layerName
@@ -428,6 +461,18 @@ def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
 			layerDef['random_noise_param'] = co.OrderedDict()
 			layerDef['random_noise_param']['adaptive_sigma']  = kwargs['adaptive_sigma']
 			layerDef['random_noise_param']['adaptive_factor'] = kwargs['adaptive_factor'] 		
+
+	elif layerType in ['gaussRender']:
+		if kwargs.has_key('top'):
+			layerDef['top'] = '"%s"' %  kwargs['top']
+		else:
+			layerDef['top']    = '"%s"' % layerName
+		layerDef['type']   = '"Python"'
+		layerDef['python_param'] = co.OrderedDict()
+		layerDef['python_param']['module'] = '"python_ief"'
+		layerDef['python_param']['layer']  = '"GaussRenderLayer"'
+		paramStr = ou.make_python_param_str(kwargs, ignoreKeys=['top'])
+		layerDef['python_param']['param_str'] = '"%s"' % paramStr
 
 	else:
 		raise Exception('%s layer type not found' % layerType)
@@ -843,17 +888,19 @@ class ProtoDef():
 			self.layers_   = co.OrderedDict(layerDict)
 			self.initData_ = []
 			return 
-		#If initializing from a file
+		#Lines that are there before the layers start. 
+		self.initData_ = []
 		self.layers_ = {}
 		self.layers_['TRAIN'] = co.OrderedDict()	
 		self.layers_['TEST']  = co.OrderedDict()
-		self.siameseConvert_  = False  #If the def has been convered to siamese or not. 
+		self.siameseConvert_  = False  #If the def has been convered to siamese or not.
+		if defFile is None:
+			return 
+		#If initializing from a file
 		fid   = open(defFile, 'r')
 		lines = fid.readlines()
 		i     = 0
 		layerInit = False
-		#Lines that are there before the layers start. 
-		self.initData_ = []
 		while True:
 			l = lines[i]
 			if not layerInit:
@@ -1387,6 +1434,14 @@ class SolverDef:
 		ou.set_recursive_key(self.data_, propName, value)
 
 	##
+	#Has property
+	def has_property(self, propName):
+		if propName in self.data_.keys():
+			return True
+		else:
+			return False
+
+	##
   # Write the solver file
 	def write(self, outFile):
 		with open(outFile, 'w') as fid:
@@ -1399,9 +1454,10 @@ class SolverDef:
 
 ##
 # Get the defaults
-def get_defaults(setArgs, defArgs):
+def get_defaults(setArgs, defArgs, defOnly=True):
 	for key in setArgs.keys():
-		assert defArgs.has_key(key), 'Key not found: %s' % key
+		if defOnly:
+			assert defArgs.has_key(key), 'Key not found: %s' % key
 		defArgs[key] = copy.deepcopy(setArgs[key])
 	return defArgs
 
@@ -1414,7 +1470,8 @@ def make_solver(**kwargs):
 						 ('gamma', 0.1), ('stepsize', 100000), ('lr_policy', '"step"'),
 						 ('display', 20),('max_iter', 310000), ('snapshot', 10000),
 						 ('snapshot_prefix', '""'), ('solver_mode', 'GPU'), ('device_id', 1),
-						 ('debug_info', 'false'), ('clip_gradients', -1)])
+						 ('debug_info', 'false'), ('clip_gradients', -1), ('iter_size', 1),
+						 ('regularization_type', '"L2"'), ('random_seed', -1)])
 
 	defArgs = get_defaults(kwargs, defArgs)  
 	sol = SolverDef()
@@ -1542,15 +1599,21 @@ class ExperimentFiles:
 		self.solDef_.write(self.solver_)	
 
 	##		
-	def extract_snapshot_name(self):
+	def extract_snapshot_name(self, getSolverFile=False):
 		'''
 			Find the name with which models are being stored. 
 		'''
 		snapshot   = self.solDef_.get_property('snapshot_prefix')
 		#_iter_%d.caffemodel is added by caffe while snapshotting. 
-		snapshot = snapshot[1:-1] + '_iter_%d.caffemodel'
-		snapshot = ou.chunk_filename(snapshot)
-		return snapshot
+		snapshotName = snapshot[1:-1] + '_iter_%d.caffemodel'
+		snapshotName = ou.chunk_filename(snapshotName)
+		#solver file
+		solverName   = snapshot[1:-1] + '_iter_%d.solverstate'
+		solverName   = ou.chunk_filename(snapshotName)	
+		if getSolverFile:
+			return solverName
+		else:	
+			return snapshot
 
 	##
 	def write_netdef(self):
@@ -1558,15 +1621,18 @@ class ExperimentFiles:
 
 	##
 	# Run the Experiment
-	def run(self):
-		cwd = os.getcwd()
-		subprocess.check_call([('cd %s && ' % self.modelDir_) + self.runTrain_] ,shell=True)
-		os.chdir(cwd)
-		shutil.copyfile(self.logTrain_, self.resultLogTrain_)		
-		if self.isTest_:
-			subprocess.check_call([('cd %s && ' % self.modelDir_) + self.runTest_] ,shell=True)
+	def run(self, runMode='cmdline'):
+		if runMode == 'cmdline':
+			cwd = os.getcwd()
+			subprocess.check_call([('cd %s && ' % self.modelDir_) + self.runTrain_] ,shell=True)
 			os.chdir(cwd)
-			shutil.copyfile(self.logTest_, self.resultLogTest_)		
+			shutil.copyfile(self.logTrain_, self.resultLogTrain_)		
+			if self.isTest_:
+				subprocess.check_call([('cd %s && ' % self.modelDir_) + self.runTest_] ,shell=True)
+				os.chdir(cwd)
+				shutil.copyfile(self.logTest_, self.resultLogTest_)	
+		else:
+			raise Exception('runMode %s not recognized' % runMode)	
 
 	def setup_resume(self, resumeIter):
 		modelFile  = self.extract_snapshot_name() % resumeIter
@@ -1589,14 +1655,18 @@ class CaffeExperiment:
 	def __init__(self, dataExpName, caffeExpName, expDirPrefix, snapDirPrefix,
 							 defPrefix = 'caffenet', solverPrefix = 'solver',
 							 logPrefix = 'log', runPrefix = 'run', deviceId = 0,
-							 repNum = None, isTest=False):
+							 debugPrefix='debug', repNum = None, isTest=False,
+							 runSolver=False):
 		'''
 			experiment directory: expDirPrefix  + dataExpName
 			snapshot   directory: snapDirPrefix + dataExpName
 			solver     file     : expDir + solverPrefix + caffeExpName
 			net-def    file     : expDir + defPrefix    + caffeExpName
 			log        file     : expDir + logPrefix    + caffeExpName
-			run        file     : expDir + runPrefix    + caffeExpName 
+			run        file     : expDir + runPrefix    + caffeExpName
+			debug      file     : expDir + runPrefix    + caffeExpName
+			runSolver           : True  - use caffe.SGDSolver for running  net 
+														False - use command line interface 
 		'''
 		self.dataExpName_  = dataExpName
 		self.caffeExpName_ = caffeExpName
@@ -1613,6 +1683,7 @@ class CaffeExperiment:
 			defDeployFile = defPrefix    + '_' + caffeExpName + '_deploy.prototxt'
 			defRecFile    = defPrefix    + '_' + caffeExpName + '_reconstruct.prototxt'
 			logFile       = logPrefix + '_' + '%s' + '_' + caffeExpName + '.txt'
+			debugFile     = debugPrefix + '_' + caffeExpName + '.pkl'
 			runFile       = runPrefix + '_' + '%s' + '_' + caffeExpName + '.sh'
 			snapPrefix    = defPrefix + '_' + caffeExpName 
 		else:
@@ -1621,6 +1692,7 @@ class CaffeExperiment:
 			defDeployFile = caffeExpName + '_' + defPrefix    + '_deploy.prototxt'
 			defRecFile    = caffeExpName + '_' + defPrefix    + '_reconstruct.prototxt'
 			logFile       = caffeExpName + '_' + '%s' + '_' + logPrefix + '.txt'
+			debugFile     = caffeExpName + '_' + debugPrefix + '.pkl'
 			runFile       = caffeExpName + '_' + '%s' + '_' + logPrefix + '.sh'
 			snapPrefix    = caffeExpName + '_' + defPrefix 
 
@@ -1633,7 +1705,8 @@ class CaffeExperiment:
 		self.files_['logTest']  = os.path.join(self.dirs_['exp'], logFile % 'test')
 		self.files_['runTrain'] = os.path.join(self.dirs_['exp'], runFile % 'train')
 		self.files_['runTest']  = os.path.join(self.dirs_['exp'], runFile % 'test')
-
+		self.files_['debug']  = os.path.join(self.dirs_['exp'], debugFile)
+		
 		#snapshot
 		self.files_['snap'] = os.path.join(snapDirPrefix, dataExpName,
 													snapPrefix + '_iter_%d.caffemodel')  
@@ -1650,8 +1723,11 @@ class CaffeExperiment:
 											logFileTrain = logFile % 'train', logFileTest = logFile % 'test', 
 											runFileTrain = runFile % 'train', runFileTest = runFile % 'test', 
 											deviceId = deviceId, repNum = repNum, isTest=isTest)
-		self.isTest_  = isTest
-		self.net_     = None
+		self.isTest_    = isTest
+		self.net_       = None
+		self.solver_    = None
+		self.runSolver_ = runSolver
+		self.expMake_   = False
 
 	##
 	#initalize from solver file/SolverDef and netdef file/ProtoDef
@@ -1692,8 +1768,8 @@ class CaffeExperiment:
 		return self.expFile_.netDef_.get_layernames_from_type(layerType, phase=phase)
 
 	##
-	def get_snapshot_name(self, numIter=10000):
-		snapName = self.expFile_.extract_snapshot_name() % numIter
+	def get_snapshot_name(self, numIter=10000, getSolverFile=False):
+		snapName = self.expFile_.extract_snapshot_name(getSolverFile=getSolverFile) % numIter
 		snapName = ou.chunk_filename(snapName)
 		return snapName
 
@@ -1728,7 +1804,7 @@ class CaffeExperiment:
 
 	# Make the experiment. 
 	def make(self, modelFile=None, writeTest=False, testIter=None, modelIter=None,
-								 resumeIter=None):
+								 resumeIter=None, dumpLogFreq=1000):
 		'''
 			modelFile - file to finetune from if needed.
 			writeTest - if the test file needs to be written. 
@@ -1743,17 +1819,25 @@ class CaffeExperiment:
 			os.makedirs(self.dirs_['snap'])
 		
 		if resumeIter is not None:
-			self.expFile_.setup_resume(resumeIter)	
 			assert modelFile is None, "Model file cannot be specified with resume\
 							just specify the number of iterations"
- 
+			self.expFile_.setup_resume(resumeIter)	
 		self.expFile_.write_netdef()
 		self.expFile_.write_solver()
-		print "MODEL: %s" % modelFile
-		self.expFile_.write_run_train(modelFile)
-		if writeTest:
-			assert testIter is not None and modelIter is not None, 'Missing variables'
-			self.expFile_.write_run_test(modelIter, testIter)		
+	
+		if self.runSolver_:
+			self.solver_ = mp.MySolver.from_file(self.expFile_.solver_,
+											 dumpLogFreq=dumpLogFreq)
+			if modelFile is not None:
+				self.solver_.copy_weights(modelFile)
+		else: 	
+			#Command line mode
+			print "MODEL: %s" % modelFile
+			self.expFile_.write_run_train(modelFile)
+			if writeTest:
+				assert testIter is not None and modelIter is not None, 'Missing variables'
+				self.expFile_.write_run_test(modelIter, testIter)		
+		self.expMake_ = True
 
 	## Make the deploy file. 
 	def make_deploy(self, dataLayerNames, imSz, **kwargs):
@@ -1771,8 +1855,14 @@ class CaffeExperiment:
 
 	##
 	# Run the experiment
-	def run(self):
-		self.expFile_.run()
+	def run(self, recFreq=20):
+		if not self.expMake_:
+			print ('Make the experiment using exp.make(), before running, returning')
+			return
+		if self.runSolver_:
+			self.solver_.solve()
+		else:
+			self.expFile_.run(runMode='cmdline')
 	
 	def get_test_accuracy(self):
 		return test_log2acc(self.files_['logTest'])

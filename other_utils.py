@@ -353,9 +353,12 @@ def chunk_filename(fName, maxLen=255):
 
 ##
 # Hash a dictonary into string
-def hash_dict_str(d):
+def hash_dict_str(d, ignoreKeys=[]):
 	d     = copy.deepcopy(d)
 	oKeys = []
+	for k in ignoreKeys:
+		if k in d.keys():
+			del d[k]
 	for k,v in d.iteritems():
 		if type(v) in [bool, int, float, str, type(None)]:
 			continue
@@ -366,7 +369,7 @@ def hash_dict_str(d):
 			oKeys.append(k)
 	hStr = []
 	for k in oKeys:
-		hStr.append('-%s' % hash_dict_Str({k: d[k]}))
+		hStr.append('-%s' % hash_dict_str({k: d[k]}))
 		del d[k]
 	hStr = ''.join('%s' % s for s in hStr)
 	return '%d%s' % (hash(frozenset(d.items())), hStr)
@@ -392,3 +395,9 @@ def make_python_param_str(params, ignoreKeys=['expStr']):
 		else:
 			paramStr = paramStr + ' --%s %s' % (k,v)
 	return paramStr
+
+##
+#Convert a list of ints into a string
+def ints_to_str(ints):
+	ch = ''.join(str(unichr(i)) for i in ints)
+	return ch

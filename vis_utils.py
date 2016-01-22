@@ -15,20 +15,71 @@ import scipy
 TMP_DATA_DIR = '/data1/pulkitag/others/caffe_tmp_data/'
 
 ##
-# Plots pairs of images. 
-def plot_pairs(im1, im2, fig=None, titleStr='', figTitle=''):
+#Plot n images
+def plot_n_ims(ims, fig=None, titleStr='', figTitle='',
+				 axTitles = None, subPlotShape=None,
+				 isBlobFormat=False, chSwap=None, trOrder=None):
+	'''
+		isBlobFormat: Caffe stores images as ch x h x w
+									True - convert the images into h x w x ch format
+		trOrder     : If certain transpose order of channels is to be used
+									overrides isBlobFormat
+	'''
+	ims = copy.deepcopy(ims)
+	if trOrder is not None:
+		for i, im in enumerate(ims):
+			ims[i] = im.transpose(trOrder)
+	if trOrder is None and isBlobFormat:
+		for i, im in enumerate(ims):
+			ims[i] = im.transpose((1,2,0))
+	if chSwap is not None:
+		for i, im in enumerate(ims):
+			ims[i] = im[:,:,chSwap]
+	plt.ion()
 	if fig is None:
 		fig = plt.figure()
 	plt.figure(fig.number)
-	ax1 = plt.subplot(1,2,1)
-	ax2 = plt.subplot(1,2,2)
-	ax1.imshow(im1.astype(np.uint8))
-	ax1.axis('off')
-	ax2.imshow(im2.astype(np.uint8))
-	ax2.axis('off')
-	plt.title(titleStr)
+	plt.clf()
+	if subPlotShape is None:
+		N = np.ceil(np.sqrt(len(ims)))
+		subPlotShape = (N,N)
+	ax = []
+	for i in range(len(ims)):
+		shp = subPlotShape + (i+1,)
+		ax.append(fig.add_subplot(*shp))
+
+	for i, im in enumerate(ims):
+		ax[i].imshow(im.astype(np.uint8))
+		ax[i].axis('off')
+		if axTitles is not None:
+			ax[i].set_title(axTitles[i])
 	fig.suptitle(figTitle)
 	plt.show()
+
+
+def plot_pairs(im1, im2, **kwargs):
+	ims = []
+	ims.append(im1)
+	ims.append(im2)
+	plot_n_ims(ims, subPlotShape=(1,2), **kwargs)
+	
+
+##
+#Plot pairs of images from an iterator_fun
+def plot_pairs_iterfun(ifun, **kwargs):
+	'''
+		ifun  : iteration function
+		kwargs: look at input arguments for plot_pairs
+	'''
+	plt.ion()
+	fig = plt.figure()
+	pltFlag = True
+	while pltFlag:
+		im1, im2 = ifun()
+		plot_pairs(im1, im2, fig=fig, **kwargs)
+		ip = raw_input('Press Enter for next pair')
+		if ip == 'q':
+			pltFlag = False	
 
 ##
 # Visualize GenericWindowDataLayer file

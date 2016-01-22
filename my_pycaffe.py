@@ -3,7 +3,10 @@
 #
 
 import numpy as np
+<<<<<<< HEAD
 #import h5py
+=======
+>>>>>>> 6697820fbd2298adf74d1e909016896194685c31
 import caffe
 import pdb
 import matplotlib.pyplot as plt
@@ -12,6 +15,13 @@ from six import string_types
 import copy
 from easydict import EasyDict as edict 
 import my_pycaffe_utils as mpu
+import pickle
+import collections as co
+try:
+	import h5py
+except:
+	print ('WARNING: h5py not found, some functions may not work')
+	
 
 class layerSz:
 	def __init__(self, stride, filterSz):
@@ -316,7 +326,8 @@ class MyNet:
 
 	
 	def set_preprocess(self, ipName='data',chSwap=(2,1,0), meanDat=None,
-										 imageDims=None, isBlobFormat=False, rawScale=None, cropDims=None):
+			imageDims=None, isBlobFormat=False, rawScale=None, cropDims=None,
+			noTransform=False, numCh=3):
 		'''
 			isBlobFormat: if the images are already coming in blobFormat or not. 
 			ipName    : the blob for which the pre-processing parameters need to be set. 
@@ -325,7 +336,14 @@ class MyNet:
 			cropDims  : the size to which the image needs to be cropped. 
 									if None - then it is automatically determined
 									this behavior is undesirable for some deploy prototxts 
+			noTransform: if no transform needs to be applied
+			numCh      : number of channels
 		'''
+		if chSwap is not None:
+			assert len(chSwap) == numCh, 'Number of channels mismatch'
+		if noTransform:
+			self.transformer[ipName] = None
+			return
 		self.transformer[ipName] = caffe.io.Transformer({ipName: self.net.blobs[ipName].data.shape})
 		#Note blobFormat will be so used that finally the image will need to be flipped. 
 		self.transformer[ipName].set_transpose(ipName, (2,0,1))	
@@ -363,8 +381,8 @@ class MyNet:
 			if isinstance(meanDat, string_types):
 				meanDat = read_mean(meanDat)
 			elif type(meanDat) ==  tuple:
-				meanDat = np.array(meanDat).reshape(3,1,1)
-				meanDat = meanDat * (np.ones((3, self.crop[2] - self.crop[0],\
+				meanDat = np.array(meanDat).reshape(numCh,1,1)
+				meanDat = meanDat * (np.ones((numCh, self.crop[2] - self.crop[0],\
 									 self.crop[3]-self.crop[1])).astype(np.float32))
 				isTuple = True
 			_,h,w = meanDat.shape
@@ -403,12 +421,15 @@ class MyNet:
 			ims: iterator over H * W * K sized images (K - number of channels) or K * H * W format. 
 		'''
 		#The image necessary needs to be float - otherwise caffe.io.resize fucks up.
+		assert ipName in self.transformer.keys()
 		ims = ims.astype(np.float32)
+		if self.transformer[ipName] is None:
+			ims = self.resize_batch(ims)
+			return ims
+
 		if np.max(ims)<=1.0:
 			print "There maybe issues with image scaling. The maximum pixel value is 1.0 and not 255.0"
 	
-		assert ipName in self.transformer.keys()
-
 		im_ = np.zeros((len(ims), 
             self.imageDims[0], self.imageDims[1], self.imageDims[2]),
             dtype=np.float32)
@@ -493,6 +514,9 @@ class MyNet:
 					raise Exception('runType %s not recognized' % runType)
 				#Resize data in the right size
 				for op_, data in ops.iteritems():
+					if data.ndim==0:
+						continue
+					#print (op_, data.shape)
 					ops[op_] = data[0:N]
 			else:
 				raise Exception('No Input data specified.')
@@ -537,7 +561,7 @@ class MyNet:
 
 	def vis_weights(self, blobName, blobNum=0, ax=None, titleName=None, isFc=False,
 						 h=None, w=None, returnData=False, chSt=0, chEn=3): 
-		assert blobName in self.net.blobs, 'BlobName not found'
+		assert blobName in self.net.params, 'BlobName not found'
 		dat  = copy.deepcopy(self.net.params[blobName][blobNum].data)
 		if isFc:
 			dat = dat.transpose((2,3,0,1))
@@ -563,75 +587,255 @@ class MyNet:
 class SolverDebugStore(object):
 	pass	
 
-class MySolver:
+class MySolver(object):
 	def __init__(self):
 		self.solver_ = None
+		self.phase_  = ['train', 'test']
 
 	def __del__(self):
 		del self.solver_
 		del self.net_
 
 	@classmethod
-	def from_file(cls, solFile):
+	def from_file(cls, solFile, recFreq=20, dumpLogFreq=None, logFile='default_log.pkl'):
+		'''
+			solFile    : solver prototxt from which to load the net
+			recFreq    : the frequency of recording
+			dumpLogFreq: the frequency with which dumpLog should be noted 
+		'''
 		self = cls()
-		self.solver_     = caffe.SGDSolver(solFile)
-		self.net_        = self.solver_.net
-		self.layerNames_ = [l for l in self.net_._layer_names]
 		self.solFile_    = solFile
-		self.paramNames_ = self.net_.params.keys()
-		self.blobNames_  = self.net_.blobs.keys()
+		self.logFile_    = logFile
+		self.recFreq_    = recFreq
+		self.dumpLogFreq_= dumpLogFreq 
+		self.setup_solver()
+		self.plotSetup_  = False
 		return self	
 
 	##
-	# Solver in the debug mode	
-	def debug_solve(self, maxIter=None):
-		self.solDef_ = mpu.SolverDef.from_file(self.solFile_)
-		if maxIter is None:
-			maxIter = self.solDef_.get_property('max_iter')	
+	#setup the solver
+	def setup_solver(self):
+		self.solDef_  = mpu.SolverDef.from_file(self.solFile_)
+		self.maxIter_ = int(self.solDef_.get_property('max_iter'))
+		self.testInterval_ = int(self.solDef_.get_property('test_interval')) 
+		if self.solDef_.has_property('solver_mode'):
+			solverMode    = self.solDef_.get_property('solver_mode')
+		else:
+			solverMode    = 'GPU'
+		if solverMode == 'GPU':
+			if self.solDef_.has_property('device_id'):
+				device = int(self.solDef_.get_property('device_id'))
+			else:
+				device = 0
+			print ('GPU Mode, setting device %d' % device)
+			caffe.set_device(device)
+			caffe.set_mode_gpu()
+		else:
+			print ('CPU Mode')
+			caffe.set_mode_cpu()
+	
+		self.solver_       = caffe.SGDSolver(self.solFile_)
+		self.net_          = co.OrderedDict()
+		self.net_[self.phase_[0]] = self.solver_.net 	
+		self.net_[self.phase_[1]] = self.solver_.test_nets[0]
+		if len(self.solver_.test_nets) > 1:
+			print (' ##### WARNING - THERE ARE MORE THAN ONE TEST-NETS, FEATURE VALS\
+							FOR TEST NETS > 1 WILL NOT BE RECORDED #################')
+			ip = raw_input('ARE YOU SURE YOU WANT TO CONTINUE(y/n)?')
+			if ip == 'n':
+				raise Exception('Quitting')
+		self.layerNames_ = co.OrderedDict()
+		self.paramNames_ = co.OrderedDict()
+		self.blobNames_  = co.OrderedDict()
+		for ph in self.phase_:
+			self.layerNames_[ph] = [l for l in self.net_[ph]._layer_names]
+			self.paramNames_[ph] = self.net_[ph].params.keys()
+			self.blobNames_[ph]  = self.net_[ph].blobs.keys()
+		
 		#Storing the data
-		self.featVals    = edict()
-		self.paramVals   = [edict(), edict()]	
-		self.paramUpdate = [edict(), edict()]	
-		#Axis for plotting
-		self.featValsAx    = edict()
-		self.paramValsAx   = edict()
-		self.paramUpdateAx = edict()
-		plt.ion()
-		for i,b in enumerate(self.blobNames_):
-			self.featVals[b] = []
-			self.featValsAx[b] = plt.subplot(len(self.blobNames_),1,i+1)
-			self.featValsAx[b].set_title(b)
-
-		for p in self.paramNames_:
-			self.paramVals[0][p] = []
-			self.paramVals[1][p] = []
-			self.paramUpdate[0][p] = []
-			self.paramUpdate[1][p] = []
-
-		for i in range(maxIter):
-			self.solver_.step(1)
-			self.record_params()	
+		self.featVals    = co.OrderedDict()
+		self.paramVals   = co.OrderedDict()
+		self.paramUpdate = co.OrderedDict()
+		for ph in self.phase_:
+			self.featVals[ph]    = edict()
+			self.paramVals[ph]   = [edict(), edict()]	
+			self.paramUpdate[ph] = [edict(), edict()]	
+			#Blobs
+			for i,b in enumerate(self.blobNames_[ph]):
+				self.featVals[ph][b] = []
+			#Params
+			for p in self.paramNames_[ph]:
+				self.paramVals[ph][0][p] = []
+				self.paramVals[ph][1][p] = []
+				self.paramUpdate[ph][0][p] = []
+				self.paramUpdate[ph][1][p] = []
+		#For recording the iterations at which data was recorded
+		self.recIter_ = co.OrderedDict() 
+		for ph in self.phase_:
+			self.recIter_[ph] = []
 
 	##
+	#Restore the solver from a previous state
+	def restore(self, fName, restoreIter=None):
+		'''
+			fName: the name of the file from which solver needs to be resumed.
+		'''
+		self.solver_.restore(fName)
+		if osp.exists(self.logFile_):
+			self.read_from_file(self.logFile_, maxIter=restoreIter)
+	
+	##
+	#Copy weights from a net file
+	def copy_weights(self, fName):
+		'''
+			fName: the name of the file from which weights need to be copied.
+		'''
+		self.solver_.copy_trained_layers_from_netfile(fName)
+
+	##
+	# Solve	
+	def solve(self, numSteps=None):
+		if numSteps is None:
+			numSteps = self.maxIter_
+		for i in range(numSteps):
+			if np.mod(self.solver_.iter, self.recFreq_)==0:
+				self.record_feats_params(phases=['train'])
+				self.recIter_['train'].append(self.solver_.iter)
+			if np.mod(self.solver_.iter, self.testInterval_)==0:
+				self.record_feats_params(phases=['test'])
+				self.recIter_['test'].append(self.solver_.iter)
+			self.solver_.step(1)
+			if np.mod(self.solver_.iter, self.dumpLogFreq_)==0:
+				self.dump_to_file()
+	##
 	#Record the data
-	def record_params(self, isPlot=True):
-		for b in self.blobNames_:
-			self.featVals[b].append(np.mean(np.abs(self.net_.blobs[b].data)))
-			if isPlot:
-				N = len(self.featVals[b])
-				self.featValsAx[b].plot(range(N), self.featVals[b])
-				plt.draw()
-		for p in self.paramNames_:
-			for i in range(2):
-				self.paramVals[i][p].append(np.mean(np.abs(self.net_.params[p][i].data)))	
-				self.paramUpdate[i][p].append(np.mean(np.abs(self.net_.params[p][i].data)))	
+	def record_feats_params(self, phases=None):
+		if phases is None:
+			phases = self.phase_
+		for ph in phases:
+			for b in self.blobNames_[ph]:
+				self.featVals[ph][b].append(np.mean(np.abs(self.net_[ph].blobs[b].data)))
+			for p in self.paramNames_[ph]:
+				for i in range(2):
+					self.paramVals[ph][i][p].append(np.mean(np.abs(self.net_[ph].params[p][i].data)))	
+					self.paramUpdate[ph][i][p].append(np.mean(np.abs(self.net_[ph].params[p][i].diff)))
+
+	##
+	#Dump the data to the file
+	def dump_to_file(self):
+		data = co.OrderedDict()
+		for ph in self.phase_:
+			data[ph] = co.OrderedDict()
+			data[ph]['blobs']  = co.OrderedDict()
+			for b in self.blobNames_[ph]:
+				data[ph]['blobs'][b] = self.featVals[ph][b]
+			data[ph]['params']       = co.OrderedDict()
+			data[ph]['paramsUpdate'] = co.OrderedDict()
+			for p in self.paramNames_[ph]:
+				data[ph]['params'][p]       = []
+				data[ph]['paramsUpdate'][p] = []
+				for i in range(2):
+					data[ph]['params'][p].append(self.paramVals[ph][i][p])	
+					data[ph]['paramsUpdate'][p].append(self.paramVals[ph][i][p])
+		data['recFreq'] = self.recFreq_	
+		data['recIter'] = self.recIter_
+		pickle.dump(data, open(self.logFile_, 'w'))
+
+	##
+	#Read the logging data from file
+	def read_from_file(self, fName, maxIter=None):
+		'''
+		fName  : File from which values need to be read
+		maxIter: read until maxIter 
+		'''
+		data = pickle.load(open(fName, 'r'))
+		self.recIter_ = data['recIter']
+		if maxIter is not None:
+			idx = np.where(self.recIter_ <= maxIter)[0][-1]
+			idx = min(idx + 1, len(self.recIter_))
+		else:
+			idx = len(self.recIter_)
+		self.recIter_ = self.recIter_[idx]
+		for ph in self.phase_:
+			for k, b in enumerate(data[ph]['blobs'].keys()):
+				self.featVals[ph][b] = data[ph]['blobs'][b][0:idx]
+				assert b == self.blobNames_[ph][k]
+			for k, p in enumerate(data[ph]['params'].keys()):
+				for i in range(2):
+					self.paramVals[ph][i][p]   = data[ph]['params'][p][i][0:idx]
+					self.paramUpdate[ph][i][p] = data[ph]['paramsUpdate'][p][i][0:idx]
+					assert p == self.paramNames_[ph][k]
 
 	##
 	# Return pointer to layer
-	def get_layer_pointer(self, layerName):
-		assert layerName in self.layerNames_, 'layer not found'
-		index = self.layerNames_.index(layerName)
-		return self.net_.layers[index]
+	def get_layer_pointer(self, layerName, ph='train'):
+		assert layerName in self.layerNames_[ph], 'layer not found'
+		index = self.layerNames_[ph].index(layerName)
+		return self.net_[ph].layers[index]
+
+	##
+	#Internal funciton for defining axes
+	def _get_axes(self, titleNames, figTitle):
+		numSub = np.ceil(np.sqrt(self.maxPerFigure_))
+		N      = len(titleNames)
+		allAx  = []
+		count  = 0
+		for fn in range(int(np.ceil(float(N)/self.maxPerFigure_))):
+			#Given a figure
+			fig = plt.figure()
+			fig.suptitle(figTitle)
+			ax = []
+			en = min(N, count + self.maxPerFigure_)
+			for i,tit in enumerate(titleNames[count:en]):
+				ax.append((fig, fig.add_subplot(numSub, numSub, i+1)))
+				ax[i][1].set_title(tit)
+			count += self.maxPerFigure_
+			allAx = allAx + ax
+		return allAx
+
+	##
+	#Setup for plotting
+	def setup_plots(self):
+		plt.close('all')
+		plt.ion()
+		self.maxPerFigure_   = 16
+		self.axBlobs_        = co.OrderedDict()
+		self.axParamValW_    = co.OrderedDict()
+		self.axParamDeltaW_  = co.OrderedDict()
+		for ph in self.phase_:
+			self.axBlobs_[ph]       = self._get_axes(self.blobNames_[ph],  
+																'%s-Feature Values' % ph)
+			self.axParamValW_[ph]   = self._get_axes(self.paramNames_[ph],
+																'%s-Parameter Values' % ph) 
+			self.axParamDeltaW_[ph] = self._get_axes(self.paramNames_[ph], 
+																'%s-Parameter Updates' % ph) 
+		self.plotSetup_      = True
+	
+	##
+	#Plot the log
+	def plot(self):
+		if not self.plotSetup_:
+			self.setup_plots()
+		plt.ion()
+		for ph in self.phase_:
+			for i,bn in enumerate(self.blobNames_[ph]):
+				fig, ax = self.axBlobs_[ph][i]
+				plt.figure(fig.number)
+				ax.plot(np.array(self.recIter_[ph]), self.featVals[ph][bn])			
+				plt.draw()
+				plt.show()
+			for i,pn in enumerate(self.paramNames_[ph]):
+				#The parameters
+				fig, ax = self.axParamValW_[ph][i]
+				plt.figure(fig.number)
+				ax.plot(np.array(self.recIter_[ph]), self.paramVals[ph][0][pn])			
+				#The delta in parameters
+				fig, ax = self.axParamDeltaW_[ph][i]
+				plt.figure(fig.number)
+				ax.plot(np.array(self.recIter_[ph]), self.paramUpdate[ph][0][pn])			
+				plt.draw()
+				plt.show()
+		
 
 ##
 # Visualize filters
