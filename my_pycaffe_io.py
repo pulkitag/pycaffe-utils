@@ -236,6 +236,34 @@ class DbReader:
 				self.cursor_.first()
 				self.nextValid_ = True
 
+	#Get the current key
+	def get_key(self):
+		if not self.nextValid_:
+			return self.cursor_.key() 
+		else:
+			return None	
+
+	#Get all keys
+	def get_key_all(self):
+		keys = []
+		self.cursor_.first()
+		isNext = True
+		while isNext:
+			key    = self.cursor_.key()
+			isNext = self.cursor_.next()
+			keys.append(key)
+		self.cursor_.first()
+		return keys 
+		
+	def read_key(self, key):
+		dat    = self.cursor_.get(key)
+		datum  = caffe.io.caffe_pb2.Datum()
+		datStr = datum.FromString(dat)
+		data   = caffe.io.datum_to_array(datStr)
+		label  = datStr.label
+		return data, label
+	
+ 
 	def read_next(self):
 		if not self.nextValid_:
 			return None, None
@@ -342,7 +370,14 @@ class DoubleDbReader(object):
 	def __del__(self):
 		for db in self.dbs_:
 			db.__del__()
-		
+	
+	def read_key(self, keys):
+		data = []
+		for db, key in zip(self.db_, keys):
+			dat, _ = db.read_key(key)
+			data.append(dat)
+		return data
+	
 	def read_next(self):
 		data = []
 		for db in self.dbs_:

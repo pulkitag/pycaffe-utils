@@ -55,6 +55,7 @@ def plot_n_ims(ims, fig=None, titleStr='', figTitle='',
 			ax[i].set_title(axTitles[i])
 	fig.suptitle(figTitle)
 	plt.show()
+	return ax
 
 
 def plot_pairs(im1, im2, **kwargs):
