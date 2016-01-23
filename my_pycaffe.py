@@ -3,10 +3,6 @@
 #
 
 import numpy as np
-<<<<<<< HEAD
-#import h5py
-=======
->>>>>>> 6697820fbd2298adf74d1e909016896194685c31
 import caffe
 import pdb
 import matplotlib.pyplot as plt
