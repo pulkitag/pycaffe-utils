@@ -3,6 +3,10 @@
 #
 
 import numpy as np
+<<<<<<< HEAD
+#import h5py
+=======
+>>>>>>> 6697820fbd2298adf74d1e909016896194685c31
 import caffe
 import pdb
 import matplotlib.pyplot as plt
@@ -1017,15 +1021,14 @@ def save_images(ims, gtLb, pdLb, svFileStr, stCount=0, isSiamese=False):
 			print fName
 			plt.savefig(fName)
 		
-
+'''
 def test_network_siamese_h5(imH5File=[], lbH5File=[], netFile=[], defFile=[], imSz=128, cropSz=112, nCh=3, outLblSz=1, meanFile=[], ipLayerName='data', lblType='uniform20',outFeatSz=20, maskLastLabel=False, db=None, svImg=False, svImFileStr=None, deviceId=None):
-	'''
-		defFile: Architecture prototxt
-		netFile : The model weights
-		maskLastLabel: In some cases it is we may need to compute the error bt ignoring the last label
-									 for example in det - where the last class might be the backgroud class
-		db: instead of h5File, provide a dbReader 
-	'''
+	#defFile: Architecture prototxt
+	#netFile : The model weights
+	#maskLastLabel: In some cases it is we may need to compute the error bt ignoring the last label
+	#							 for example in det - where the last class might be the backgroud class
+	#db: instead of h5File, provide a dbReader 
+	
 	isBlobFormat = True
 	if db is None:
 		isBlobFormat = False
@@ -1106,7 +1109,7 @@ def test_network_siamese_h5(imH5File=[], lbH5File=[], netFile=[], defFile=[], im
 		
 	confMat = compute_error(gtLabels, labels, 'classify')
 	return confMat, labels, gtLabels	
-
+'''
 
 def read_mean_txt(fileName):
 	with open(fileName,'r') as f:
