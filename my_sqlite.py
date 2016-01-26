@@ -165,7 +165,7 @@ class SqDb(object):
 				idx.append(i)
 		assert (len(idx))<=1
 		if len(idx) == 1:
-			return out[idx[0]]
+			return [out[idx[0]]]
 		else:
 			return []
 
