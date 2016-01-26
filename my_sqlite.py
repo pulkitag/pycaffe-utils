@@ -22,7 +22,7 @@ def type2str(typ):
 def type2SqType(typ):
 	if typ in [type(None)]:
 		return 'NULL'
-	elif typ in [int, long]:
+	elif typ in [bool, int, long]:
 		return 'INTEGER'
 	elif typ in [str]:
 		return 'TEXT'
@@ -128,8 +128,8 @@ class SqDb(object):
 		cmd=('INSERT INTO %s ({}) VALUES ({})' % tableName).format(co, vl)
 		self.execute(cmd)	
 
-	#Get matching entried
-	def get(self, vals, tableName='table1', ignoreKeys=[]):
+	#Get matching entries, in sql-style
+	def _get(self, vals, tableName='table1', ignoreKeys=[]):
 		vals    = self._process_vals(vals, ignoreKeys)
 		newCols = self._check_columns(vals, tableName)
 		if newCols: 
@@ -145,7 +145,29 @@ class SqDb(object):
 		out  = []
 		for r in rows:
 			out.append(dict(r))
-		return out	
+		return out
+	
+		#Find the unique dictionary
+	def get(self, vals, tableName='table1', ignoreKeys=[]):
+		out = self._get(vals, tableName=tableName, ignoreKeys=ignoreKeys)
+		if len(out)==0:
+			return out
+		idx = []
+		for i,o in enumerate(out):
+			appendFlag = True
+			for ok, ov in o.iteritems():
+				if ok == '_mysqlid':
+					continue
+				if not(ok in vals.keys()) and not(ov == None):
+					appendFlag = False
+					break
+			if appendFlag:
+				idx.append(i)
+		assert (len(idx))<=1
+		if len(idx) == 1:
+			return out[idx[0]]
+		else:
+			return []
 
 	#Get the id of the entry
 	def get_id(self, vals, tableName='table1',
@@ -162,6 +184,7 @@ class SqDb(object):
 	def fetch(self, vals={}, tableName='table1', ignoreKeys=[]):
 		vals    = self._process_vals(vals, ignoreKeys=ignoreKeys)
 		newCols = self._check_columns(vals, tableName)
+		print (newCols)
 		if newCols: 
 			self.add(vals, tableName)
 		out = self.get(vals, tableName)

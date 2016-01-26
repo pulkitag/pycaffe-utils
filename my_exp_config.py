@@ -7,9 +7,22 @@ from easydict import EasyDict as edict
 import copy
 import other_utils as ou
 import pickle
+import my_sqlite as msq
 
 REAL_PATH = os.path.dirname(os.path.realpath(__file__))
-DEF_DB    = osp.join(REAL_PATH, 'default-exp-db.sqlite')
+DEF_DB    = osp.join(REAL_PATH, 'test_data/default-exp-db.sqlite')
+
+def get_sql_id(dbFile, dArgs, ignoreKeys=[]):
+	sql    = msq.SqDb(dbFile)
+	try: 
+		sql.fetch(dArgs, ignoreKeys=ignoreKeys)
+		idName = sql.get_id(dArgs, ignoreKeys=ignoreKeys)
+	except:
+		sql.close()
+		raise Exception('Error in fetching a name from database')
+	sql.close()
+	return idName	 
+
 
 def get_default_net_prms(dbFile=DEF_DB, **kwargs):
 	dArgs = edict()
@@ -26,13 +39,13 @@ def get_default_net_prms(dbFile=DEF_DB, **kwargs):
 	#runNum
 	dArgs.runNum      = 0
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
-	
-	
+	dArgs.expStr      = get_sql_id(dbFile, dArgs)
 	return dArgs
 
 
-def get_siamese_net_prms(**kwargs):
+def get_siamese_net_prms(dbFile=DEF_DB, **kwargs):
 	dArgs = get_default_net_prms()
+	del dArgs['expStr']
 	#Layers at which the nets are to be concatenated
 	dArgs.concatLayer = 'fc6'
 	#If dropouts should be used in the concatenation layer
@@ -42,11 +55,13 @@ def get_siamese_net_prms(**kwargs):
 	#If an extra FC layer needs to be added
 	dArgs.extraFc     = None
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
+	dArgs.expStr      = get_sql_id(dbFile, dArgs)
 	return dArgs
 
 
-def get_siamese_window_net_prms(**kwargs):
+def get_siamese_window_net_prms(dbFile=DEF_DB, **kwargs):
 	dArgs = get_siamese_net_prms()
+	del dArgs['expStr']
 	#Size of input image
 	dArgs.imSz = 227
 	#If random cropping is to be used	
@@ -54,22 +69,25 @@ def get_siamese_window_net_prms(**kwargs):
 	#If gray scale images need to be used
 	dArgs.isGray   = False
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
+	dArgs.expStr   = get_sql_id(dbFile, dArgs)
 	return dArgs
 
 '''
 Defining get_custom_net_prms()
 def get_custom_net_prms(**kwargs):
 	dArgs = get_your_favorite_prms()
+	del dArgs['expStr']
 	##DEFINE NEW PROPERTIES##
 	dArgs.myNew = value
 	################
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
+	dArgs.expStr      = get_sql_id(dbFile, dArgs)
 	return dArgs
 '''
 
 ##
 # Parameters that specify the learning
-def get_default_solver_prms(**kwargs):
+def get_default_solver_prms(dbFile=DEF_DB, **kwargs):
 	'''
 		Refer to caffe.proto for a description of the
 		variables. 
@@ -96,10 +114,9 @@ def get_default_solver_prms(**kwargs):
 	dArgs.display       = 20
 	#Update parameters
 	dArgs        = mpu.get_defaults(kwargs, dArgs, False)
-	dArgs.expStr = ou.hash_dict_str(dArgs, 
-								 ignoreKeys=['test_iter',  'test_interval',
+	dArgs.expStr = 'solprms' + get_sql_id(dbFile, dArgs,
+									ignoreKeys=['test_iter',  'test_interval',
 								 'snapshot', 'display'])
-	dArgs.expStr = 'solPrms' + dArgs.expStr
 	return dArgs 
 
 
