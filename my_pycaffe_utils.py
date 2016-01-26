@@ -1444,13 +1444,18 @@ class SolverDef:
 	##
   # Write the solver file
 	def write(self, outFile):
+		oData = copy.deepcopy(self.data_)
+		for keys in self.data_:
+			if type(self.data_[key]) == str:
+				if not self.data_[key][0] == '"':
+					oData[key] = '"%s"' % self.data_[key]
 		with open(outFile, 'w') as fid:
 			fid.write('# Autotmatically generated solver prototxt \n')
 			if self.data_.has_key('device_id'):
 				if type(self.data_['device_id']) == list:
 					#self.data_['device_id'] = ''.join('%d,' % d for d in self.data_['device_id'])[0:-1]
-					self.data_['device_id'] = self.data_['device_id'][0]
-			write_proto_param(fid, self.data_, numTabs=0)
+					oData['device_id'] = self.data_['device_id'][0]
+			write_proto_param(fid, oData, numTabs=0)
 
 ##
 # Get the defaults

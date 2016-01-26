@@ -8,7 +8,10 @@ import copy
 import other_utils as ou
 import pickle
 
-def get_default_net_prms(**kwargs):
+REAL_PATH = os.path.dirname(os.path.realpath(__file__))
+DEF_DB    = osp.join(REAL_PATH, 'default-exp-db.sqlite')
+
+def get_default_net_prms(dbFile=DEF_DB, **kwargs):
 	dArgs = edict()
 	#Name of the net which will be constructed
 	dArgs.netName = 'alexnet'
@@ -23,13 +26,13 @@ def get_default_net_prms(**kwargs):
 	#runNum
 	dArgs.runNum      = 0
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
-	dArgs.expStr = 'nwPrms' + ou.hash_dict_str(dArgs)
+	
+	
 	return dArgs
 
 
 def get_siamese_net_prms(**kwargs):
 	dArgs = get_default_net_prms()
-	del dArgs['expStr']
 	#Layers at which the nets are to be concatenated
 	dArgs.concatLayer = 'fc6'
 	#If dropouts should be used in the concatenation layer
@@ -39,13 +42,11 @@ def get_siamese_net_prms(**kwargs):
 	#If an extra FC layer needs to be added
 	dArgs.extraFc     = None
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
-	dArgs.expStr = 'nwPrms' + ou.hash_dict_str(dArgs)
 	return dArgs
 
 
 def get_siamese_window_net_prms(**kwargs):
 	dArgs = get_siamese_net_prms()
-	del dArgs['expStr']
 	#Size of input image
 	dArgs.imSz = 227
 	#If random cropping is to be used	
@@ -53,19 +54,16 @@ def get_siamese_window_net_prms(**kwargs):
 	#If gray scale images need to be used
 	dArgs.isGray   = False
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
-	dArgs.expStr = 'nwPrms' + ou.hash_dict_str(dArgs)
 	return dArgs
 
 '''
 Defining get_custom_net_prms()
 def get_custom_net_prms(**kwargs):
 	dArgs = get_your_favorite_prms()
-	del dArgs['expStr']
 	##DEFINE NEW PROPERTIES##
 	dArgs.myNew = value
 	################
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
-	dArgs.expStr = 'nwPrms' + ou.hash_dict_str(dArgs)
 	return dArgs
 '''
 
@@ -81,7 +79,7 @@ def get_default_solver_prms(**kwargs):
 	dArgs.iter_size   = 1
 	dArgs.max_iter    = 250000
 	dArgs.base_lr   = 0.001
-	dArgs.lr_policy   = '"step"' 
+	dArgs.lr_policy   = 'step' 
 	dArgs.stepsize    = 20000	
 	dArgs.gamma     = 0.5
 	dArgs.weight_decay = 0.0005
@@ -89,7 +87,7 @@ def get_default_solver_prms(**kwargs):
 	#Momentum
 	dArgs.momentum  = 0.9
 	#Other
-	dArgs.regularization_type = '"L2"'
+	dArgs.regularization_type = 'L2'
 	dArgs.random_seed = -1
 	#Testing info
 	dArgs.test_iter     = 100

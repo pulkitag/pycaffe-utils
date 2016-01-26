@@ -62,7 +62,7 @@ class SqDb(object):
 	def execute(self, cmd):
 		print (cmd)	
 		self.c_.execute(cmd)
-		#self.c_.commit()	
+		self.c_.commit()	
 	
 	def get_table_names(self):
 		cmd    = "SELECT name FROM sqlite_master WHERE type='table'"
@@ -98,10 +98,10 @@ class SqDb(object):
 		return idxStr	
 	
 	#get rid of all None values in vals
-	def _process_vals(self, vals):
+	def _process_vals(self, vals, ignoreKeys=[]):
 		assert not '_mysqlid' in vals.keys()
 		vals = copy.deepcopy(vals)
-		delKeys = []
+		delKeys = [] + ignoreKeys
 		for k, v in vals.iteritems():
 			if v is None:
 				delKeys.append(k)
@@ -117,9 +117,9 @@ class SqDb(object):
 		self.execute(cmd)
 
 	#Add to the db
-	def add(self, vals, tableName='table1'):
-		vals    = self._process_vals(vals)
-		entry   = self.get(vals, tableName)
+	def add(self, vals, tableName='table1', ignoreKeys=[]):
+		vals    = self._process_vals(vals, ignoreKeys)
+		entry   = self.get(vals, tableName, ignoreKeys)
 		if len(entry) > 0:
 			raise Exception ('Entry already exists, cannot add')
 		vals['_mysqlid'] = str(uuid.uuid1())
@@ -129,13 +129,16 @@ class SqDb(object):
 		self.execute(cmd)	
 
 	#Get matching entried
-	def get(self, vals, tableName='table1'):
-		vals    = self._process_vals(vals)
+	def get(self, vals, tableName='table1', ignoreKeys=[]):
+		vals    = self._process_vals(vals, ignoreKeys)
 		newCols = self._check_columns(vals, tableName)
 		if newCols: 
 			return []
 		indexStr = self.get_sql_index_condition(vals)  
-		cmd = 'SELECT * FROM %s WHERE %s' % (tableName, indexStr)
+		if len(vals.keys()) > 0:
+			cmd = 'SELECT * FROM %s WHERE %s' % (tableName, indexStr)
+		else:
+			cmd = 'SELECT * FROM %s' % tableName
 		self.c_.row_factory = sqlite3.Row
 		cs  = self.c_.execute(cmd)
 		rows = cs.fetchall()
@@ -144,9 +147,20 @@ class SqDb(object):
 			out.append(dict(r))
 		return out	
 
+	#Get the id of the entry
+	def get_id(self, vals, tableName='table1',
+						 isMulti=False, ignoreKeys=[]):
+		out = self.get(vals, tableName=tableName, ignoreKeys=ignoreKeys)
+		if len(out) > 1 and not isMulti:
+			raise Exception('More than one entry found, something is amiss')
+		if len(out) == 0:
+			return None
+		else:
+			return str(out[0]['_mysqlid'])	
+
 	#fetch the entry if it exists or create a new one
-	def fetch(self, vals={}, tableName='table1'):
-		vals    = self._process_vals(vals)
+	def fetch(self, vals={}, tableName='table1', ignoreKeys=[]):
+		vals    = self._process_vals(vals, ignoreKeys=ignoreKeys)
 		newCols = self._check_columns(vals, tableName)
 		if newCols: 
 			self.add(vals, tableName)
@@ -168,7 +182,6 @@ class SqDb(object):
 					continue
 				self._add_column(k, type2SqType(type(vals[k])), tableName)	
 		return newCols		
-
 
 	#Add a column to the table
 	def _add_column(self, colName, colType, tableName='table1'):	
