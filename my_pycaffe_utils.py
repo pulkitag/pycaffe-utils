@@ -1618,7 +1618,7 @@ class ExperimentFiles:
 		if getSolverFile:
 			return solverName
 		else:	
-			return snapshot
+			return snapshotName
 
 	##
 	def write_netdef(self):

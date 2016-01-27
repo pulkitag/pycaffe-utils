@@ -371,7 +371,7 @@ class DoubleDbReader(object):
 	
 	def read_key(self, keys):
 		data = []
-		for db, key in zip(self.db_, keys):
+		for db, key in zip(self.dbs_, keys):
 			dat, _ = db.read_key(key)
 			data.append(dat)
 		return data
