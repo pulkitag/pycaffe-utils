@@ -223,7 +223,7 @@ class DbReader:
 		self.cursor_.first()
 
 	def __del__(self):
-		self.txn_.commit()
+		#self.txn_.commit()
 		self.db_.close()
 	
 	#Maintain the appropriate variables

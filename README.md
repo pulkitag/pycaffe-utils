@@ -2,6 +2,44 @@ This repository provides utilities for conveniently defining and running deep le
 
 Note: This README is being constantly updated and currently covers only a few functions provided as part of pycaffe-utils.
 
+
+Setting up a Caffe Experiment
+----------------------------------
+
+There are three main classes of parameters needed to define an experiment:
+- What data is to be used (i.e. images/labels) (called <i>dPrms</i>  or data parameters)
+- What should be the structure of the network  (called <i>nPrms</i> or network parameters)
+- How should the learning proceed (called <i>sPrms</i> or solver parameters)
+
+Details of different experiments (specified by different parameters) are stored in SQL database. The SQL database stores an automatically generated hash string for each parameter setting and that is used to automatically generate and name files that are used to run
+the experiment. 
+
+#### Specifying <i>dPrms</i>
+type: EasyDict
+
+The minimal definition of <i>dPrms</i> is below:
+<pre><code>
+from easydict import EasyDict as edict
+dPrms     =   edict()
+dPrms['expStr'] = 'demo-experiment' #The name of the experiment
+dPrms.paths     = edict() #The paths that will be used
+dPrms.paths.exp    = edict() #Paths for storing experiment files
+dPrms.paths.exp.dr = '/directory/for/storing/experiment/files'
+dPrms.paths.snapshot    = edict()
+dPrms.paths.snapshot.dr = '/directory/for/storing/snapshots'
+</code></pre>
+
+#### Specifying <i>nPrms</i>
+type: EasyDict
+
+The minimal definition is defined in module <i>my_exp_config</i> in function <i> get_default_net_prms</i>.
+
+Custom <i>nPrms</i> should be defined as following
+
+
+
+
+
 Debugging a Caffe Experiment
 -------------------------------------------------------------------------
 

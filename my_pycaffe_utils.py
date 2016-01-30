@@ -1445,8 +1445,8 @@ class SolverDef:
   # Write the solver file
 	def write(self, outFile):
 		oData = copy.deepcopy(self.data_)
-		for keys in self.data_:
-			if type(self.data_[key]) == str:
+		for key in self.data_:
+			if type(self.data_[key]) == str and key not in ['solver_mode', 'debug_info']:
 				if not self.data_[key][0] == '"':
 					oData[key] = '"%s"' % self.data_[key]
 		with open(outFile, 'w') as fid:

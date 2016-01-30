@@ -147,7 +147,7 @@ class SqDb(object):
 			out.append(dict(r))
 		return out
 	
-		#Find the unique dictionary
+	#Find the unique dictionary
 	def get(self, vals, tableName='table1', ignoreKeys=[]):
 		out = self._get(vals, tableName=tableName, ignoreKeys=ignoreKeys)
 		if len(out)==0:
@@ -163,7 +163,7 @@ class SqDb(object):
 					break
 			if appendFlag:
 				idx.append(i)
-		assert (len(idx))<=1
+		assert (len(idx))<=1, idx
 		if len(idx) == 1:
 			return [out[idx[0]]]
 		else:
@@ -184,7 +184,6 @@ class SqDb(object):
 	def fetch(self, vals={}, tableName='table1', ignoreKeys=[]):
 		vals    = self._process_vals(vals, ignoreKeys=ignoreKeys)
 		newCols = self._check_columns(vals, tableName)
-		print (newCols)
 		if newCols: 
 			self.add(vals, tableName)
 		out = self.get(vals, tableName)

@@ -62,7 +62,7 @@ def plot_pairs(im1, im2, **kwargs):
 	ims = []
 	ims.append(im1)
 	ims.append(im2)
-	plot_n_ims(ims, subPlotShape=(1,2), **kwargs)
+	return plot_n_ims(ims, subPlotShape=(1,2), **kwargs)
 	
 
 ##
