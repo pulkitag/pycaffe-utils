@@ -342,6 +342,12 @@ class CaffeSolverExperiment:
 			print ('Make the experiment using exp.make(), before running, returning')
 			return
 		self.solver_.solve()
+
+	##
+	#Visualize the log
+	def vis_log(self):
+		self.solver_.read_log_from_file()
+		self.solver_.plot()
 	
 	def get_test_accuracy(self):
 		print ('NOT IMPLEMENTED YET')
