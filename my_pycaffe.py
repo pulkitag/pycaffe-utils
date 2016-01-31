@@ -582,8 +582,138 @@ class MyNet:
 			return weights
 
 
-class SolverDebugStore(object):
-	pass	
+class CaffeNetLogger(object):	
+	def __init__(self, logFile='default_log.pkl', phases=['train', 'test']):
+		self.logFile_ = logFile
+		self.phase_   = phases
+		self.featVals    = co.OrderedDict()
+		self.paramVals   = co.OrderedDict()
+		self.paramUpdate = co.OrderedDict()
+		self.blobNames_  = co.OrderedDict()
+		self.paramNames_ = co.OrderedDict()	
+		self.layerNames_ = co.OrderedDict()	
+		for ph in self.phase_:
+			self.featVals[ph]    = edict()
+			self.paramVals[ph]   = [edict(), edict()]	
+			self.paramUpdate[ph] = [edict(), edict()]	
+		self.plotSetup_      = False
+		#For recording the iterations at which data was recorded
+		self.recIter_ = co.OrderedDict() 
+		for ph in self.phase_:
+			self.recIter_[ph] = []
+		self.isRead_ = False
+
+	@classmethod
+	def from_net(cls, net, logFile='default_log.pkl', phases=['train', 'test']):
+		self = cls(logFile, phases)
+		for ph in self.phase_:
+			self.layerNames_[ph] = [l for l in net[ph]._layer_names]
+			self.paramNames_[ph] = net[ph].params.keys()
+			self.blobNames_[ph]  = net[ph].blobs.keys()
+			#Blobs
+			for i,b in enumerate(self.blobNames_[ph]):
+				self.featVals[ph][b] = []
+			#Params
+			for p in self.paramNames_[ph]:
+				self.paramVals[ph][0][p] = []
+				self.paramVals[ph][1][p] = []
+				self.paramUpdate[ph][0][p] = []
+				self.paramUpdate[ph][1][p] = []
+		return self
+
+	#Read the logging data from file
+	def read(self, fName=None, maxIter=None):
+		'''
+		fName  : File from which values need to be read
+		maxIter: read until maxIter 
+		'''
+		self.isRead_ = True
+		if fName is None and osp.exists(self.logFile_):
+			fName = self.logFile_
+		else:
+			print ('%s doesnot exist, please specify a log file name' % self.logFile_)
+			return
+		data = pickle.load(open(fName, 'r'))
+		self.recIter_ = data['recIter']
+		for ph in self.phase_:
+			if maxIter is not None:
+				idx = np.where(self.recIter_[ph] <= maxIter)[0][-1]
+				idx = min(idx + 1, len(self.recIter_[ph]))
+			else:
+				idx = len(self.recIter_[ph])
+			self.recIter_[ph]   = self.recIter_[ph][0:idx]
+			self.blobNames_[ph] = data[ph]['blobs'].keys()
+			for k, b in enumerate(data[ph]['blobs'].keys()):
+				self.featVals[ph][b] = data[ph]['blobs'][b][0:idx]
+			self.paramNames_[ph] = data[ph]['params'].keys()
+			for k, p in enumerate(data[ph]['params'].keys()):
+				for i in range(2):
+					self.paramVals[ph][i][p]   = data[ph]['params'][p][i][0:idx]
+					self.paramUpdate[ph][i][p] = data[ph]['paramsUpdate'][p][i][0:idx]
+
+	#Internal funciton for defining axes
+	def _get_axes(self, titleNames, figTitle):
+		numSub = np.ceil(np.sqrt(self.maxPerFigure_))
+		N      = len(titleNames)
+		allAx  = []
+		count  = 0
+		for fn in range(int(np.ceil(float(N)/self.maxPerFigure_))):
+			#Given a figure
+			fig = plt.figure()
+			fig.suptitle(figTitle)
+			ax = []
+			en = min(N, count + self.maxPerFigure_)
+			for i,tit in enumerate(titleNames[count:en]):
+				ax.append((fig, fig.add_subplot(numSub, numSub, i+1)))
+				ax[i][1].set_title(tit)
+			count += self.maxPerFigure_
+			allAx = allAx + ax
+		return allAx
+
+	#Setup for plotting
+	def setup_plots(self):
+		plt.close('all')
+		plt.ion()
+		self.maxPerFigure_   = 16
+		self.axBlobs_        = co.OrderedDict()
+		self.axParamValW_    = co.OrderedDict()
+		self.axParamDeltaW_  = co.OrderedDict()
+		for ph in self.phase_:
+			self.axBlobs_[ph]       = self._get_axes(self.blobNames_[ph],  
+																'%s-Feature Values' % ph)
+			self.axParamValW_[ph]   = self._get_axes(self.paramNames_[ph],
+																'%s-Parameter Values' % ph) 
+			self.axParamDeltaW_[ph] = self._get_axes(self.paramNames_[ph], 
+																'%s-Parameter Updates' % ph) 
+		self.plotSetup_      = True
+
+	#Plot the log
+	def plot(self):
+		if not self.isRead_:
+			self.read()
+		if not self.plotSetup_:
+			self.setup_plots()
+		plt.ion()
+		for ph in self.phase_:
+			for i,bn in enumerate(self.blobNames_[ph]):
+				fig, ax = self.axBlobs_[ph][i]
+				plt.figure(fig.number)
+				print (ph, bn, len(self.recIter_[ph]), len(self.featVals[ph][bn]))
+				ax.plot(np.array(self.recIter_[ph]), self.featVals[ph][bn])			
+				plt.draw()
+				plt.show()
+			for i,pn in enumerate(self.paramNames_[ph]):
+				#The parameters
+				fig, ax = self.axParamValW_[ph][i]
+				plt.figure(fig.number)
+				ax.plot(np.array(self.recIter_[ph]), self.paramVals[ph][0][pn])			
+				#The delta in parameters
+				fig, ax = self.axParamDeltaW_[ph][i]
+				plt.figure(fig.number)
+				ax.plot(np.array(self.recIter_[ph]), self.paramUpdate[ph][0][pn])			
+				plt.draw()
+				plt.show()
+	
 
 class MySolver(object):
 	def __init__(self):
@@ -642,36 +772,8 @@ class MySolver(object):
 			ip = raw_input('ARE YOU SURE YOU WANT TO CONTINUE(y/n)?')
 			if ip == 'n':
 				raise Exception('Quitting')
-		self.layerNames_ = co.OrderedDict()
-		self.paramNames_ = co.OrderedDict()
-		self.blobNames_  = co.OrderedDict()
-		for ph in self.phase_:
-			self.layerNames_[ph] = [l for l in self.net_[ph]._layer_names]
-			self.paramNames_[ph] = self.net_[ph].params.keys()
-			self.blobNames_[ph]  = self.net_[ph].blobs.keys()
+		self.log_    = CaffeNetLogger.from_net(self.net_, self.logFile_, self.phase_) 
 		
-		#Storing the data
-		self.featVals    = co.OrderedDict()
-		self.paramVals   = co.OrderedDict()
-		self.paramUpdate = co.OrderedDict()
-		for ph in self.phase_:
-			self.featVals[ph]    = edict()
-			self.paramVals[ph]   = [edict(), edict()]	
-			self.paramUpdate[ph] = [edict(), edict()]	
-			#Blobs
-			for i,b in enumerate(self.blobNames_[ph]):
-				self.featVals[ph][b] = []
-			#Params
-			for p in self.paramNames_[ph]:
-				self.paramVals[ph][0][p] = []
-				self.paramVals[ph][1][p] = []
-				self.paramUpdate[ph][0][p] = []
-				self.paramUpdate[ph][1][p] = []
-		#For recording the iterations at which data was recorded
-		self.recIter_ = co.OrderedDict() 
-		for ph in self.phase_:
-			self.recIter_[ph] = []
-
 	##
 	#Restore the solver from a previous state
 	def restore(self, fName, restoreIter=None):
@@ -680,7 +782,7 @@ class MySolver(object):
 		'''
 		self.solver_.restore(fName)
 		if osp.exists(self.logFile_):
-			self.read_log_from_file(self.logFile_, maxIter=restoreIter)
+			self.log_.read(self.logFile_, maxIter=restoreIter)
 	
 	##
 	#Copy weights from a net file
@@ -698,10 +800,10 @@ class MySolver(object):
 		for i in range(numSteps):
 			if np.mod(self.solver_.iter, self.recFreq_)==0:
 				self.record_feats_params(phases=['train'])
-				self.recIter_['train'].append(self.solver_.iter)
+				self.log_.recIter_['train'].append(self.solver_.iter)
 			if np.mod(self.solver_.iter, self.testInterval_)==0:
 				self.record_feats_params(phases=['test'])
-				self.recIter_['test'].append(self.solver_.iter)
+				self.log_.recIter_['test'].append(self.solver_.iter)
 			self.solver_.step(1)
 			if np.mod(self.solver_.iter, self.dumpLogFreq_)==0:
 				self.dump_to_file()
@@ -713,12 +815,14 @@ class MySolver(object):
 		if phases is None:
 			phases = self.phase_
 		for ph in phases:
-			for b in self.blobNames_[ph]:
-				self.featVals[ph][b].append(np.mean(np.abs(self.net_[ph].blobs[b].data)))
-			for p in self.paramNames_[ph]:
+			for b in self.log_.blobNames_[ph]:
+				self.log_.featVals[ph][b].append(np.mean(np.abs(self.net_[ph].blobs[b].data)))
+			for p in self.log_.paramNames_[ph]:
 				for i in range(2):
-					self.paramVals[ph][i][p].append(np.mean(np.abs(self.net_[ph].params[p][i].data)))	
-					self.paramUpdate[ph][i][p].append(np.mean(np.abs(self.net_[ph].params[p][i].diff)))
+					dat = np.mean(np.abs(self.net_[ph].params[p][i].data))
+					dif = np.mean(np.abs(self.net_[ph].params[p][i].diff))
+					self.log_.paramVals[ph][i][p].append(dat)	
+					self.log_.paramUpdate[ph][i][p].append(dif)
 		t = time.time() - t1
 		print ('$$$$$$$$$$$$ TIME TO RECORD %f' % t)
 
@@ -731,124 +835,37 @@ class MySolver(object):
 		for ph in self.phase_:
 			data[ph] = co.OrderedDict()
 			data[ph]['blobs']  = co.OrderedDict()
-			for b in self.blobNames_[ph]:
-				data[ph]['blobs'][b] = self.featVals[ph][b]
+			for b in self.log_.blobNames_[ph]:
+				data[ph]['blobs'][b] = self.log_.featVals[ph][b]
 			data[ph]['params']       = co.OrderedDict()
 			data[ph]['paramsUpdate'] = co.OrderedDict()
-			for p in self.paramNames_[ph]:
+			for p in self.log_.paramNames_[ph]:
 				data[ph]['params'][p]       = []
 				data[ph]['paramsUpdate'][p] = []
 				for i in range(2):
-					data[ph]['params'][p].append(self.paramVals[ph][i][p])	
-					data[ph]['paramsUpdate'][p].append(self.paramVals[ph][i][p])
+					data[ph]['params'][p].append(self.log_.paramVals[ph][i][p])	
+					data[ph]['paramsUpdate'][p].append(self.log_.paramVals[ph][i][p])
 		data['recFreq'] = self.recFreq_	
-		data['recIter'] = self.recIter_
+		data['recIter'] = self.log_.recIter_
 		pickle.dump(data, open(self.logFile_, 'w'))
 		t = time.time() - t1
 		print ('$$$$$$$$$$$$ TIME TO DUMP %f' % t)
 
-	##
-	#Read the logging data from file
-	def read_log_from_file(self, fName=None, maxIter=None):
-		'''
-		fName  : File from which values need to be read
-		maxIter: read until maxIter 
-		'''
-		if fName is None and osp.exists(self.logFile_):
-			fName = self.logFile_
-		else:
-			print ('%s doesnot exist, please specify a log file name' % self.logFile_)
-			return
-		data = pickle.load(open(fName, 'r'))
-		self.recIter_ = data['recIter']
-		for ph in self.phase_:
-			if maxIter is not None:
-				idx = np.where(self.recIter_[ph] <= maxIter)[0][-1]
-				idx = min(idx + 1, len(self.recIter_[ph]))
-			else:
-				idx = len(self.recIter_[ph])
-			self.recIter_[ph] = self.recIter_[ph][0:idx]
-			for k, b in enumerate(data[ph]['blobs'].keys()):
-				self.featVals[ph][b] = data[ph]['blobs'][b][0:idx]
-				assert b == self.blobNames_[ph][k]
-			for k, p in enumerate(data[ph]['params'].keys()):
-				for i in range(2):
-					self.paramVals[ph][i][p]   = data[ph]['params'][p][i][0:idx]
-					self.paramUpdate[ph][i][p] = data[ph]['paramsUpdate'][p][i][0:idx]
-					assert p == self.paramNames_[ph][k]
-
-	##
 	# Return pointer to layer
 	def get_layer_pointer(self, layerName, ph='train'):
-		assert layerName in self.layerNames_[ph], 'layer not found'
-		index = self.layerNames_[ph].index(layerName)
+		assert layerName in self.log_.layerNames_[ph], 'layer not found'
+		index = self.log_.layerNames_[ph].index(layerName)
 		return self.net_[ph].layers[index]
-
-	##
-	#Internal funciton for defining axes
-	def _get_axes(self, titleNames, figTitle):
-		numSub = np.ceil(np.sqrt(self.maxPerFigure_))
-		N      = len(titleNames)
-		allAx  = []
-		count  = 0
-		for fn in range(int(np.ceil(float(N)/self.maxPerFigure_))):
-			#Given a figure
-			fig = plt.figure()
-			fig.suptitle(figTitle)
-			ax = []
-			en = min(N, count + self.maxPerFigure_)
-			for i,tit in enumerate(titleNames[count:en]):
-				ax.append((fig, fig.add_subplot(numSub, numSub, i+1)))
-				ax[i][1].set_title(tit)
-			count += self.maxPerFigure_
-			allAx = allAx + ax
-		return allAx
-
-	##
-	#Setup for plotting
-	def setup_plots(self):
-		plt.close('all')
-		plt.ion()
-		self.maxPerFigure_   = 16
-		self.axBlobs_        = co.OrderedDict()
-		self.axParamValW_    = co.OrderedDict()
-		self.axParamDeltaW_  = co.OrderedDict()
-		for ph in self.phase_:
-			self.axBlobs_[ph]       = self._get_axes(self.blobNames_[ph],  
-																'%s-Feature Values' % ph)
-			self.axParamValW_[ph]   = self._get_axes(self.paramNames_[ph],
-																'%s-Parameter Values' % ph) 
-			self.axParamDeltaW_[ph] = self._get_axes(self.paramNames_[ph], 
-																'%s-Parameter Updates' % ph) 
-		self.plotSetup_      = True
 	
-	##
+	
+	#Read from log file
+	def read_log_from_file(self, **kwargs):
+		self.log_.read(**kwargs)
+	
 	#Plot the log
 	def plot(self):
-		if not self.plotSetup_:
-			self.setup_plots()
-		plt.ion()
-		for ph in self.phase_:
-			for i,bn in enumerate(self.blobNames_[ph]):
-				fig, ax = self.axBlobs_[ph][i]
-				plt.figure(fig.number)
-				print (ph, bn, len(self.recIter_[ph]), len(self.featVals[ph][bn]))
-				ax.plot(np.array(self.recIter_[ph]), self.featVals[ph][bn])			
-				plt.draw()
-				plt.show()
-			for i,pn in enumerate(self.paramNames_[ph]):
-				#The parameters
-				fig, ax = self.axParamValW_[ph][i]
-				plt.figure(fig.number)
-				ax.plot(np.array(self.recIter_[ph]), self.paramVals[ph][0][pn])			
-				#The delta in parameters
-				fig, ax = self.axParamDeltaW_[ph][i]
-				plt.figure(fig.number)
-				ax.plot(np.array(self.recIter_[ph]), self.paramUpdate[ph][0][pn])			
-				plt.draw()
-				plt.show()
-		
-
+		self.log_.plot()
+				
 ##
 # Visualize filters
 def vis_square(data, padsize=1, padval=0, ax=None, titleName=None, returnData=False,
