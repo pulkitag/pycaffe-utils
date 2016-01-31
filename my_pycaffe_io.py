@@ -326,6 +326,27 @@ class DbReader:
 		if not isPrev:
 			self.cursor_.last()
 		self._maintain()
+
+	#Compute the mean of the data
+	def compute_mean(self):
+		self.cursor_.first()
+		im, _ = self.read_next()
+		mu    = np.zeros(im.shape)
+		mu[...] = im[...]
+		wrap    = self.wrap_
+		self.wrap_ = False
+		N       = 1
+		while True:
+			im, _ = self.read_next()
+			if im is None:
+				break
+			mu += im
+			N  += 1
+			if np.mod(N,1000)==1:
+				print ('Processed %d images' % N)
+		mu = mu / float(N)
+		self.wrap_ = wrap
+		return mu	
 	
 	#close
 	def close(self):
