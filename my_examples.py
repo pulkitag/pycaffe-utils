@@ -18,7 +18,7 @@ def get_mnist_paths():
 #Define any parameters that may influence the experiment details
 def get_mnist_prms():
 	prms = edict()
-	prms['expName'] = 'mnist'
+	prms['expStr'] = 'mnist'
 	prms.paths = get_mnist_paths() 
 	return prms
 

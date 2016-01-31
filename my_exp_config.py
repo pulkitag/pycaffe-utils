@@ -7,8 +7,24 @@ from easydict import EasyDict as edict
 import copy
 import other_utils as ou
 import pickle
+import my_sqlite as msq
 
-def get_default_net_prms(**kwargs):
+REAL_PATH = os.path.dirname(os.path.realpath(__file__))
+DEF_DB    = osp.join(REAL_PATH, 'test_data/default-exp-db.sqlite')
+
+def get_sql_id(dbFile, dArgs, ignoreKeys=[]):
+	sql    = msq.SqDb(dbFile)
+	#try: 
+	sql.fetch(dArgs, ignoreKeys=ignoreKeys)
+	idName = sql.get_id(dArgs, ignoreKeys=ignoreKeys)
+	#except:
+	#	sql.close()
+	#	raise Exception('Error in fetching a name from database')
+	sql.close()
+	return idName	 
+
+
+def get_default_net_prms(dbFile=DEF_DB, **kwargs):
 	dArgs = edict()
 	#Name of the net which will be constructed
 	dArgs.netName = 'alexnet'
@@ -17,18 +33,18 @@ def get_default_net_prms(**kwargs):
 	#If weights from a pretrained net are to be used
 	dArgs.preTrainNet = None
 	#The base proto from which net will be constructed
-	dArgs.baseNetDefProto = 'deploy.prototxt'
+	dArgs.baseNetDefProto = None
 	#Batch size
-	dArgs.batchsize   = None
+	dArgs.batchSize   = None
 	#runNum
 	dArgs.runNum      = 0
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
-	dArgs.expStr = 'nwPrms' + ou.hash_dict_str(dArgs)
+	dArgs.expStr      = get_sql_id(dbFile, dArgs)
 	return dArgs
 
 
-def get_siamese_net_prms(**kwargs):
-	dArgs = get_default_net_prms()
+def get_siamese_net_prms(dbFile=DEF_DB, **kwargs):
+	dArgs = get_default_net_prms(dbFile)
 	del dArgs['expStr']
 	#Layers at which the nets are to be concatenated
 	dArgs.concatLayer = 'fc6'
@@ -39,12 +55,12 @@ def get_siamese_net_prms(**kwargs):
 	#If an extra FC layer needs to be added
 	dArgs.extraFc     = None
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
-	dArgs.expStr = 'nwPrms' + ou.hash_dict_str(dArgs)
+	dArgs.expStr      = get_sql_id(dbFile, dArgs)
 	return dArgs
 
 
-def get_siamese_window_net_prms(**kwargs):
-	dArgs = get_siamese_net_prms()
+def get_siamese_window_net_prms(dbFile=DEF_DB, **kwargs):
+	dArgs = get_siamese_net_prms(dbFile)
 	del dArgs['expStr']
 	#Size of input image
 	dArgs.imSz = 227
@@ -53,7 +69,7 @@ def get_siamese_window_net_prms(**kwargs):
 	#If gray scale images need to be used
 	dArgs.isGray   = False
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
-	dArgs.expStr = 'nwPrms' + ou.hash_dict_str(dArgs)
+	dArgs.expStr   = get_sql_id(dbFile, dArgs)
 	return dArgs
 
 '''
@@ -65,13 +81,13 @@ def get_custom_net_prms(**kwargs):
 	dArgs.myNew = value
 	################
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
-	dArgs.expStr = 'nwPrms' + ou.hash_dict_str(dArgs)
+	dArgs.expStr      = get_sql_id(dbFile, dArgs)
 	return dArgs
 '''
 
 ##
 # Parameters that specify the learning
-def get_default_solver_prms(**kwargs):
+def get_default_solver_prms(dbFile=DEF_DB, **kwargs):
 	'''
 		Refer to caffe.proto for a description of the
 		variables. 
@@ -81,7 +97,7 @@ def get_default_solver_prms(**kwargs):
 	dArgs.iter_size   = 1
 	dArgs.max_iter    = 250000
 	dArgs.base_lr   = 0.001
-	dArgs.lr_policy   = '"step"' 
+	dArgs.lr_policy   = 'step' 
 	dArgs.stepsize    = 20000	
 	dArgs.gamma     = 0.5
 	dArgs.weight_decay = 0.0005
@@ -89,7 +105,7 @@ def get_default_solver_prms(**kwargs):
 	#Momentum
 	dArgs.momentum  = 0.9
 	#Other
-	dArgs.regularization_type = '"L2"'
+	dArgs.regularization_type = 'L2'
 	dArgs.random_seed = -1
 	#Testing info
 	dArgs.test_iter     = 100
@@ -98,15 +114,47 @@ def get_default_solver_prms(**kwargs):
 	dArgs.display       = 20
 	#Update parameters
 	dArgs        = mpu.get_defaults(kwargs, dArgs, False)
-	dArgs.expStr = ou.hash_dict_str(dArgs, 
-								 ignoreKeys=['test_iter',  'test_interval',
+	dArgs.expStr = 'solprms' + get_sql_id(dbFile, dArgs,
+									ignoreKeys=['test_iter',  'test_interval',
 								 'snapshot', 'display'])
-	dArgs.expStr = 'solPrms' + dArgs.expStr
 	return dArgs 
 
+##
+#Make Solver
+def get_solver_def(solPrms):
+	solPrms = copy.deepcopy(solPrms)
+	del solPrms['expStr']
+	if solPrms['baseSolDefFile'] is not None:
+		solDef = mpu.Solver.from_file(solPrms)	
+	else:
+		del solPrms['baseSolDefFile']
+		solDef = mpu.make_solver(**solPrms)	
+	return solDef
 
-def get_solver_caffe_prms(nwFn=None, nwPrms={}, solFn=None,
-						solPrms={}, resumeIter=None, baseDefDir=''):
+##
+#Make Solver
+def get_net_def(dPrms, nwPrms):
+	'''
+		dPrms : data parameters
+		nwPrms: parameters that define the net 
+	'''
+	if nwPrms.baseDefProto is None:
+		return None
+	else:
+		netDef = mpu.ProtoDef(nwPrms.baseDefProto) 
+	return netDef
+
+
+def get_caffe_prms(nwFn=None, nwPrms={}, solFn=None,
+						solPrms={}, resumeIter=None):
+	'''
+		nwFn, nwPrms  : nwPrms are passed as input to nwFn to generate the 
+										complete set of network parameters. 
+		solFn, solPrms: solPrms are passes as input ro solFn to generate the
+										complete set of solver parameters.
+		resumeIter    : if the experiment needs to be resumed from a previously
+										stored number of iterations.  
+	'''
 	if nwFn is None:
 		nwFn = get_default_net_prms
 	if solFn is None:
@@ -114,31 +162,27 @@ def get_solver_caffe_prms(nwFn=None, nwPrms={}, solFn=None,
 	nwPrms  = nwFn(**nwPrms)
 	solPrms = solFn(**solPrms) 
 	cPrms   = edict()
-	cPrms.baseDefDir = baseDefDir
 	cPrms.nwPrms     = copy.deepcopy(nwPrms)
 	cPrms.lrPrms     = copy.deepcopy(solPrms)	
 	cPrms.resumeIter = resumeIter
 	expStr = osp.join(cPrms.nwPrms.expStr, cPrms.lrPrms.expStr) + '/'
-	del solPrms['expStr']
-	del solPrms['baseSolDefFile']
-	cPrms.solver = mpu.make_solver(**solPrms)	
 	cPrms.expStr = expStr
 	return cPrms	
 
 ##
 # Programatically make a Caffe Experiment. 
 class CaffeSolverExperiment:
-	def __init__(self, prms, cPrms):
+	def __init__(self, dPrms, cPrms, netDefFn=get_net_def, solverDefFn=get_solver_def):
 		'''
-			prms:          dict containing key 'expName' and 'paths'
+			dPrms:         dict containing key 'expStr' and 'paths'
 										 contains dataset specific parameters
 			cPrms:         dict contraining 'expStr', 'resumeIter', 'nwPrms'
-									 	 contains net and sovler spefici parameters
+									 	 contains net and sovler specific parameters
 		'''
-		dataExpName        = prms['expName']
+		dataExpName        = dPrms['expStr']
 		caffeExpName       = cPrms['expStr']
-		expDirPrefix       = prms.paths.exp.dr
-		snapDirPrefix      = prms.paths.exp.snapshot.dr
+		expDirPrefix       = dPrms.paths.exp.dr
+		snapDirPrefix      = dPrms.paths.exp.snapshot.dr
 		#Relevant directories. 
 		self.dirs_  = {}
 		self.dirs_['exp']  = osp.join(expDirPrefix,  dataExpName)
@@ -171,10 +215,9 @@ class CaffeSolverExperiment:
 
 		#Store the solver and the net definition files
 		self.expFile_   = edict()
-		self.expFile_.solDef_ = copy.deepcopy(cPrms.solver)
+		self.expFile_.solDef_ = solverDefFn(cPrms.lrPrms)
 		self.setup_solver()
-		self.expFile_.netDef_ = mpu.ProtoDef(osp.join(cPrms.baseDefDir,
-														cPrms.nwPrms.baseNetDefProto)) 
+		self.expFile_.netDef_ = netDefFn(dPrms, cPrms.nwPrms) 
 		#Other class parameters
 		self.solver_    = None
 		self.expMake_   = False
@@ -213,6 +256,7 @@ class CaffeSolverExperiment:
 		'''
 			Find the name with which models are being stored. 
 		'''
+		assert self.solDef_ is not None, 'Solver has not been formed'
 		snapshot   = self.solDef_.get_property('snapshot_prefix')
 		#_iter_%d.caffemodel is added by caffe while snapshotting. 
 		snapshotName = snapshot[1:-1] + '_iter_%d.caffemodel'
@@ -256,6 +300,8 @@ class CaffeSolverExperiment:
 		'''
 			deviceId: the gpu on which to run
 		'''
+		assert self.expFile_.solDef_ is not None, 'SolverDef has not been formed'
+		assert self.expFile_.netDef_ is not None, 'NetDef has not been formed'
 		self.expFile_.solDef_.set_property('device_id', deviceId)
 		#Write the solver and the netdef file
 		if not osp.exists(self.dirs_['exp']):
@@ -296,183 +342,16 @@ class CaffeSolverExperiment:
 			print ('Make the experiment using exp.make(), before running, returning')
 			return
 		self.solver_.solve()
+
+	##
+	#Visualize the log
+	def vis_log(self):
+		self.solver_.read_log_from_file()
+		self.solver_.plot()
 	
 	def get_test_accuracy(self):
 		print ('NOT IMPLEMENTED YET')
 
-
-	
-
-def get_caffe_prms_old(nwPrms, lrPrms, finePrms=None, 
-									 isScratch=True, deviceId=1,
-									 runNum=0, resumeIter=0): 
-	caffePrms = edict()
-	caffePrms.deviceId  = deviceId
-	caffePrms.isScratch = isScratch
-	caffePrms.nwPrms    = copy.deepcopy(nwPrms)
-	caffePrms.lrPrms    = copy.deepcopy(lrPrms)
-	caffePrms.finePrms  = copy.deepcopy(finePrms)
-	caffePrms.resumeIter = resumeIter
-
-	expStr = nwPrms.expStr + '/' + lrPrms.expStr
-	if finePrms is not None:
-		expStr = expStr + '/' + finePrms.expStr
-	if runNum > 0:
-		expStr = expStr + '_run%d' % runNum
-	caffePrms['expStr'] = expStr
-	caffePrms['solver'] = lrPrms.solver
-	return caffePrms
-
-
-
-##
-# Parameters required to specify the n/w architecture
-def get_nw_prms(isHashStr=False, **kwargs):
-	dArgs = edict()
-	dArgs.netName     = 'alexnet'
-	dArgs.concatLayer = 'fc6'
-	dArgs.concatDrop  = False
-	dArgs.contextPad  = 0
-	dArgs.imSz        = 227
-	dArgs.imgntMean   = True
-	dArgs.maxJitter   = 0
-	dArgs.randCrop    = False
-	dArgs.lossWeight  = 1.0
-	dArgs.multiLossProto   = None
-	dArgs.ptchStreamNum    = 256
-	dArgs.poseStreamNum    = 256
-	dArgs.isGray           = False
-	dArgs.isPythonLayer    = False
-	dArgs.extraFc          = None
-	dArgs.numFc5           = None
-	dArgs.numConv4         = None
-	dArgs.numCommonFc      = None
-	dArgs.lrAbove          = None
-	dArgs = mpu.get_defaults(kwargs, dArgs)
-	if dArgs.numFc5 is not None:
-		assert(dArgs.concatLayer=='fc5')
-	expStr = 'net-%s_cnct-%s_cnctDrp%d_contPad%d_imSz%d_imgntMean%d_jit%d'\
-						%(dArgs.netName, dArgs.concatLayer, dArgs.concatDrop, 
-							dArgs.contextPad,
-							dArgs.imSz, dArgs.imgntMean, dArgs.maxJitter)
-	if dArgs.numFc5 is not None:
-		expStr = '%s_numFc5-%d' % (expStr, dArgs.numFc5)
-	if dArgs.numConv4 is not None:
-		expStr = '%s_numConv4-%d' % (expStr, dArgs.numConv4)
-	if dArgs.numCommonFc is not None:
-		expStr = '%s_numCommonFc-%d' % (expStr, dArgs.numCommonFc)
-	if dArgs.randCrop:
-		expStr = '%s_randCrp%d' % (expStr, dArgs.randCrop)
-	if not(dArgs.lossWeight==1.0):
-		if type(dArgs.lossWeight)== list:
-			lStr = ''
-			for i,l in enumerate(dArgs.lossWeight):
-				lStr = lStr + 'lw%d-%.1f_' % (i,l)
-			lStr = lStr[0:-1]
-			print lStr
-			expStr = '%s_%s' % (expStr, lStr)
-		else:
-			assert isinstance(dArgs.lossWeight, (int, long, float))
-			expStr = '%s_lw%.1f' % (expStr, dArgs.lossWeight)
-	if dArgs.multiLossProto is not None:
-		expStr = '%s_mlpr%s-posn%d-ptsn%d' % (expStr,
-							dArgs.multiLossProto, dArgs.poseStreamNum, dArgs.ptchStreamNum)
-	if dArgs.isGray:
-		expStr = '%s_grayIm' % expStr
-	if dArgs.isPythonLayer:
-		expStr = '%s_pylayers' % expStr
-	if dArgs.extraFc is not None:
-		expStr = '%s_extraFc%d' % (expStr, dArgs.extraFc)
-	if dArgs.lrAbove is not None:
-		expStr = '%s_lrAbove-%s' % (expStr, dArgs.lrAbove)
-	if not isHashStr:
-		dArgs.expStr = expStr 
-	else:
-		dArgs.expStr = 'nwPrms-%s' % ou.hash_dict_str(dArgs)
-	return dArgs 
-
-##
-# Parameters that specify the learning
-def get_lr_prms(isHashStr=False, **kwargs):	
-	dArgs = edict()
-	dArgs.batchsize = 128
-	dArgs.stepsize  = 20000	
-	dArgs.base_lr   = 0.001
-	dArgs.max_iter  = 250000
-	dArgs.gamma     = 0.5
-	dArgs.weight_decay = 0.0005
-	dArgs.clip_gradients = -1
-	dArgs.debug_info = False
-	dArgs  = mpu.get_defaults(kwargs, dArgs)
-	#Make the solver 
-	debugStr = '%s' % dArgs.debug_info
-	debugStr = debugStr.lower()
-	del dArgs['debug_info']
-	solArgs = edict({'test_iter': 100, 'test_interval': 1000,
-						 'snapshot': 2000, 
-							'debug_info': debugStr})
-	#print dArgs.keys()
-	expStr = 'batchSz%d_stepSz%.0e_blr%.5f_mxItr%.1e_gamma%.2f_wdecay%.6f'\
-					 % (dArgs.batchsize, dArgs.stepsize, dArgs.base_lr,
-							dArgs.max_iter, dArgs.gamma, dArgs.weight_decay)
-	if not(dArgs.clip_gradients==-1):
-		expStr = '%s_gradClip%.1f' % (expStr, dArgs.clip_gradients)
-	if not isHashStr:
-		dArgs.expStr = expStr 
-	else:
-		dArgs.expStr = 'lrPrms-%s' % ou.hash_dict_str(dArgs)
-	for k in dArgs.keys():
-		if k in ['batchsize', 'expStr']:
-			continue
-		solArgs[k] = copy.deepcopy(dArgs[k])
-
-	dArgs.solver = mpu.make_solver(**solArgs)	
-	return dArgs 
-
-##
-# Parameters for fine-tuning
-def get_finetune_prms(isHashStr=False, **kwargs):
-	'''
-		sourceModelIter: The number of model iterations of the source model to consider
-		fine_max_iter  : The maximum iterations to which the target model should be trained.
-		lrAbove        : If learning is to be performed some layer. 
-		fine_base_lr   : The base learning rate for finetuning. 
- 		fineRunNum     : The run num for the finetuning.
-		fineNumData    : The amount of data to be used for the finetuning. 
-		fineMaxLayer   : The maximum layer of the source n/w that should be considered.  
-	''' 
-	dArgs = edict()
-	dArgs.base_lr = 0.001
-	dArgs.runNum  = 1
-	dArgs.maxLayer = None
-	dArgs.lrAbove  = None
-	dArgs.dataset  = 'sun'
-	dArgs.maxIter  = 40000
-	dArgs.extraFc     = False
-	dArgs.extraFcDrop = False
-	dArgs.sourceModelIter = 60000 
-	dArgs = mpu.get_defaults(kwargs, dArgs)
- 	return dArgs 
-
-def get_caffe_prms(nwPrms, lrPrms, finePrms=None, 
-									 isScratch=True, deviceId=1,
-									 runNum=0, resumeIter=0): 
-	caffePrms = edict()
-	caffePrms.deviceId  = deviceId
-	caffePrms.isScratch = isScratch
-	caffePrms.nwPrms    = copy.deepcopy(nwPrms)
-	caffePrms.lrPrms    = copy.deepcopy(lrPrms)
-	caffePrms.finePrms  = copy.deepcopy(finePrms)
-	caffePrms.resumeIter = resumeIter
-
-	expStr = nwPrms.expStr + '/' + lrPrms.expStr
-	if finePrms is not None:
-		expStr = expStr + '/' + finePrms.expStr
-	if runNum > 0:
-		expStr = expStr + '_run%d' % runNum
-	caffePrms['expStr'] = expStr
-	caffePrms['solver'] = lrPrms.solver
-	return caffePrms
 
 def get_default_caffe_prms(deviceId=1):
 	nwPrms = get_nw_prms()

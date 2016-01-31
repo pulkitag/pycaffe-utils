@@ -7,12 +7,14 @@ import caffe
 import pdb
 import matplotlib.pyplot as plt
 import os
+from os import path as osp
 from six import string_types
 import copy
 from easydict import EasyDict as edict 
 import my_pycaffe_utils as mpu
 import pickle
 import collections as co
+import time
 try:
 	import h5py
 except:
@@ -678,7 +680,7 @@ class MySolver(object):
 		'''
 		self.solver_.restore(fName)
 		if osp.exists(self.logFile_):
-			self.read_from_file(self.logFile_, maxIter=restoreIter)
+			self.read_log_from_file(self.logFile_, maxIter=restoreIter)
 	
 	##
 	#Copy weights from a net file
@@ -706,6 +708,8 @@ class MySolver(object):
 	##
 	#Record the data
 	def record_feats_params(self, phases=None):
+		t1 = time.time()
+		print ('RECORDING FEATURE STATS')
 		if phases is None:
 			phases = self.phase_
 		for ph in phases:
@@ -715,10 +719,14 @@ class MySolver(object):
 				for i in range(2):
 					self.paramVals[ph][i][p].append(np.mean(np.abs(self.net_[ph].params[p][i].data)))	
 					self.paramUpdate[ph][i][p].append(np.mean(np.abs(self.net_[ph].params[p][i].diff)))
+		t = time.time() - t1
+		print ('$$$$$$$$$$$$ TIME TO RECORD %f' % t)
 
 	##
 	#Dump the data to the file
 	def dump_to_file(self):
+		t1 = time.time()
+		print ('SOLVER DUMPING TO FILE')
 		data = co.OrderedDict()
 		for ph in self.phase_:
 			data[ph] = co.OrderedDict()
@@ -736,23 +744,30 @@ class MySolver(object):
 		data['recFreq'] = self.recFreq_	
 		data['recIter'] = self.recIter_
 		pickle.dump(data, open(self.logFile_, 'w'))
+		t = time.time() - t1
+		print ('$$$$$$$$$$$$ TIME TO DUMP %f' % t)
 
 	##
 	#Read the logging data from file
-	def read_from_file(self, fName, maxIter=None):
+	def read_log_from_file(self, fName=None, maxIter=None):
 		'''
 		fName  : File from which values need to be read
 		maxIter: read until maxIter 
 		'''
+		if fName is None and osp.exists(self.logFile_):
+			fName = self.logFile_
+		else:
+			print ('%s doesnot exist, please specify a log file name' % self.logFile_)
+			return
 		data = pickle.load(open(fName, 'r'))
 		self.recIter_ = data['recIter']
-		if maxIter is not None:
-			idx = np.where(self.recIter_ <= maxIter)[0][-1]
-			idx = min(idx + 1, len(self.recIter_))
-		else:
-			idx = len(self.recIter_)
-		self.recIter_ = self.recIter_[idx]
 		for ph in self.phase_:
+			if maxIter is not None:
+				idx = np.where(self.recIter_[ph] <= maxIter)[0][-1]
+				idx = min(idx + 1, len(self.recIter_[ph]))
+			else:
+				idx = len(self.recIter_[ph])
+			self.recIter_[ph] = self.recIter_[ph][0:idx]
 			for k, b in enumerate(data[ph]['blobs'].keys()):
 				self.featVals[ph][b] = data[ph]['blobs'][b][0:idx]
 				assert b == self.blobNames_[ph][k]
@@ -817,6 +832,7 @@ class MySolver(object):
 			for i,bn in enumerate(self.blobNames_[ph]):
 				fig, ax = self.axBlobs_[ph][i]
 				plt.figure(fig.number)
+				print (ph, bn, len(self.recIter_[ph]), len(self.featVals[ph][bn]))
 				ax.plot(np.array(self.recIter_[ph]), self.featVals[ph][bn])			
 				plt.draw()
 				plt.show()
