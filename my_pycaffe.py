@@ -713,7 +713,23 @@ class CaffeNetLogger(object):
 				ax.plot(np.array(self.recIter_[ph]), self.paramUpdate[ph][0][pn])			
 				plt.draw()
 				plt.show()
-	
+
+	#Only plot the losses
+	def	plot_loss(self, ax=None):
+		if not self.isRead_:
+			self.read()
+		plt.ion()
+		if ax is None:
+			fig = plt.figure()
+			ax  = fig.add_subplot(111)
+		colors = ['r', 'b']
+		for p, ph in enumerate(self.phase_):
+			for i, bn in enumerate(self.blobNames_[ph]):
+				if 'loss' in bn:
+					ax.plot(np.array(self.recIter_[ph]), self.featVals[ph][bn], colors[p])
+					ax.set_title(bn)
+		plt.show()
+		plt.draw()	
 
 class MySolver(object):
 	def __init__(self):
