@@ -10,6 +10,18 @@ from os import path as osp
 import collections as co
 import pdb
 from easydict import EasyDict as edict
+
+##
+# Get the defaults
+def get_defaults(setArgs, defArgs, defOnly=True):
+	for key in setArgs.keys():
+		if defOnly:
+			assert defArgs.has_key(key), 'Key not found: %s' % key
+		defArgs[key] = copy.deepcopy(setArgs[key])
+	return defArgs
+
+
+
 ##
 # Verify if all the keys are present recursively in the dict
 def verify_recursive_key(data, keyNames, verifyOnly=False):
