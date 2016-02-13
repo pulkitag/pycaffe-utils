@@ -21,6 +21,7 @@ try:
 except:
 	print ('WARNING: h5py not found, some functions may not work')
 CAFFE_PATH = cfg.CAFFE_PATH
+get_defaults = ou.get_defaults
 
 def zf_saliency(net, imBatch, numOutputs, opName, ipName='data', stride=2, patchSz=11):
 	'''
@@ -1459,12 +1460,12 @@ class SolverDef:
 
 ##
 # Get the defaults
-def get_defaults(setArgs, defArgs, defOnly=True):
-	for key in setArgs.keys():
-		if defOnly:
-			assert defArgs.has_key(key), 'Key not found: %s' % key
-		defArgs[key] = copy.deepcopy(setArgs[key])
-	return defArgs
+#def get_defaults(setArgs, defArgs, defOnly=True):
+#	for key in setArgs.keys():
+#		if defOnly:
+#			assert defArgs.has_key(key), 'Key not found: %s' % key
+#		defArgs[key] = copy.deepcopy(setArgs[key])
+#	return defArgs
 
 
 ##

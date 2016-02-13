@@ -12,7 +12,7 @@ There are three main classes of parameters needed to define an experiment:
 - How should the learning proceed (called <i>sPrms</i> or solver parameters)
 
 Details of different experiments (specified by different parameters) are stored in SQL database. The SQL database stores an automatically generated hash string for each parameter setting and that is used to automatically generate and name files that are used to run
-the experiment. 
+the experiment.
 
 #### Specifying <i>dPrms</i>
 type: EasyDict
@@ -34,7 +34,14 @@ type: EasyDict
 
 The minimal definition is defined in module <i>my_exp_config</i> in function <i> get_default_net_prms</i>.
 
-Custom <i>nPrms</i> should be defined as following
+Custom <i>nPrms</i> should be defined as following:
+(To be updated soon).
+
+#### Specifying <i>sPrms</i>
+type: EasyDict
+
+To be updated soon.
+
 
 
 
