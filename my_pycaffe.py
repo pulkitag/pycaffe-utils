@@ -715,7 +715,7 @@ class CaffeNetLogger(object):
 				plt.show()
 
 	#Only plot the losses
-	def	plot_loss(self, ax=None):
+	def	plot_loss(self, ax=None, layerNames=[]):
 		if not self.isRead_:
 			self.read()
 		plt.ion()
@@ -725,7 +725,10 @@ class CaffeNetLogger(object):
 		colors = ['r', 'b']
 		for p, ph in enumerate(self.phase_):
 			for i, bn in enumerate(self.blobNames_[ph]):
-				if 'loss' in bn:
+				if len(layerNames) == 0 and 'loss' in bn:
+					ax.plot(np.array(self.recIter_[ph]), self.featVals[ph][bn], colors[p])
+					ax.set_title(bn)
+				elif layerNames[0] in bn:
 					ax.plot(np.array(self.recIter_[ph]), self.featVals[ph][bn], colors[p])
 					ax.set_title(bn)
 		plt.show()
