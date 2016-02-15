@@ -1994,7 +1994,8 @@ class CaffeTest:
 		self.net_.set_preprocess(ipName = dataLayerNames[0], isBlobFormat=isBlobFormat,
 										imageDims = (imH, imW, channels),
 										cropDims  = (cropH, cropW), chSwap=chSwap,
-										rawScale = scale, meanDat = meanFile)  
+										rawScale = scale, meanDat = meanFile,
+										numCh = len(chSwap))  
 		self.ip_      = dataLayerNames[0]
 		self.op_      = opNames
 		self.batchSz_ = batchSz

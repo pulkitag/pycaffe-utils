@@ -32,6 +32,18 @@ def type2SqType(typ):
 		raise Exception('Type %s not recognized' % typ)
 	
 
+def get_sql_id(dbFile, dArgs, ignoreKeys=[]):
+	sql    = SqDb(dbFile)
+	#try: 
+	sql.fetch(dArgs, ignoreKeys=ignoreKeys)
+	idName = sql.get_id(dArgs, ignoreKeys=ignoreKeys)
+	#except:
+	#	sql.close()
+	#	raise Exception('Error in fetching a name from database')
+	sql.close()
+	return idName	 
+
+
 class SqDb(object):
 	'''
 		Wrapper class which makes it easy to manipulate SQLite3 objects using
