@@ -1901,7 +1901,7 @@ class CaffeTest:
 		return self
 
 	@classmethod
-	def from_model(cls, defFile, modelFile, deviceId=0):
+	def from_model(cls, defFile, modelFile, deviceId=0, lmdbTest=None):
 		self      = cls()
 		self.exp_ = None	
 		self.netdef_   = ProtoDef(defFile)
@@ -1911,7 +1911,11 @@ class CaffeTest:
 			self.defFile_  = 'tmp_reconstruct.prototxt'
 		self.model_    = modelFile		
 		self.device_   = deviceId
-		self.ipMode_   = None
+		if lmdbTest is not None:
+			self.ipMode_ = 'lmdb'
+			self.db_  = mpio.DbReader(lmdbTest)
+		else:
+			self.ipMode_   = None
 		return self
 
 	##
