@@ -1989,17 +1989,19 @@ class CaffeTest:
 		if self.ipMode_ == 'lmdb':
 			isBlobFormat = True
 			chSwap       = None
+			numCh        = 3
 		else:
 			isBlobFormat = False
 			if chSwap is None:
-				chSwap       = (2,1,0) 
+				chSwap  = (2,1,0) 
+			numCh = len(chSwap)
 
 		#print (type(self.net_))
 		self.net_.set_preprocess(ipName = dataLayerNames[0], isBlobFormat=isBlobFormat,
 										imageDims = (imH, imW, channels),
 										cropDims  = (cropH, cropW), chSwap=chSwap,
 										rawScale = scale, meanDat = meanFile,
-										numCh = len(chSwap))  
+										numCh = numCh)  
 		self.ip_      = dataLayerNames[0]
 		self.op_      = opNames
 		self.batchSz_ = batchSz
