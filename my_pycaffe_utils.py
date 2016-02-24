@@ -1926,7 +1926,8 @@ class CaffeTest:
 						 batchSz=100, delLayers=['accuracy', 'loss'],
 						 maxClassCount=None, maxLabel=None, meanFile=None,
 						 delAbove=None, isAccuracyTest=True,
-						 chSwap=None, testMode=True):
+						 chSwap=None, testMode=True,
+						 noPreprocess=False, deployStr='default'):
 		'''
 			This will simply store the gt and predicted labels
 			opName         : The layer from which the predicted features need to be taken.
@@ -1940,6 +1941,7 @@ class CaffeTest:
 			maxLabel       : Used in conjuction with maxClassCount, labels are assumed to be from	
 											 [0, maxLabel) 
 		'''
+		self.noPreprocess_ = noPreprocess
 		if not isinstance(opNames, list):
 			opNames = [opNames]
 		assert dataLayerNames is None or len(dataLayerNames)==1
@@ -1978,6 +1980,16 @@ class CaffeTest:
 			self.netdef_ = self.exp_.get_deploy_file()
 			#Name of the model
 			self.model_  = self.exp_.get_snapshot_name(numIter=modelIterations)
+		elif self.ipMode_ == 'lmdb':
+			pDef = ProtoDef(self.defFile_)
+			pDef.make_deploy(dataLayerNames = dataLayerNames, 
+								imSz = [[channels, cropH, cropW]], 
+								batchSz = batchSz, delLayers = delLayers, delAbove=delAbove,
+								newDataLayerNames=newDataLayerNames)
+			fName = 'tmp/test_%s_deploy.prototxt' % defaultStr
+			ou.mkdir(fName)	
+			pDef.write(fName)
+			self.netdef_ = fName
 		else:
 			self.netdef_ = self.defFile_
 		#Setup the network
@@ -1996,12 +2008,13 @@ class CaffeTest:
 				chSwap  = (2,1,0) 
 			numCh = len(chSwap)
 
-		#print (type(self.net_))
-		self.net_.set_preprocess(ipName = dataLayerNames[0], isBlobFormat=isBlobFormat,
-										imageDims = (imH, imW, channels),
-										cropDims  = (cropH, cropW), chSwap=chSwap,
-										rawScale = scale, meanDat = meanFile,
-										numCh = numCh)  
+		if self.noPreprocess_:
+			#print (type(self.net_))
+			self.net_.set_preprocess(ipName = dataLayerNames[0], isBlobFormat=isBlobFormat,
+											imageDims = (imH, imW, channels),
+											cropDims  = (cropH, cropW), chSwap=chSwap,
+											rawScale = scale, meanDat = meanFile,
+											numCh = numCh)  
 		self.ip_      = dataLayerNames[0]
 		self.op_      = opNames
 		self.batchSz_ = batchSz
@@ -2066,7 +2079,10 @@ class CaffeTest:
 				runFlag = False
 			#print 'running: ', data.shape, label.shape
 			#Get the features
-			op = self.net_.forward_all(blobs=self.op_, **{self.ip_: data})
+			if self.noPreprocess_:
+				op = self.net_.forward_all(blobs=self.op_)
+			else:
+				op = self.net_.forward_all(blobs=self.op_, **{self.ip_: data})
 			#If there are multiple outputs - then concatenate them along the channel dim.
 			opDat = []
 			for i,key in enumerate(self.op_):
