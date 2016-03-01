@@ -591,7 +591,9 @@ class CaffeNetLogger(object):
 		self.paramVals   = co.OrderedDict()
 		self.paramUpdate = co.OrderedDict()
 		self.blobNames_  = co.OrderedDict()
-		self.paramNames_ = co.OrderedDict()	
+		self.paramNames_ = co.OrderedDict()
+		#number of parameters for instance with weight, bias = 2
+		self.numParam_   = co.OrderedDict()	
 		self.layerNames_ = co.OrderedDict()	
 		for ph in self.phase_:
 			self.featVals[ph]    = edict()
@@ -616,10 +618,11 @@ class CaffeNetLogger(object):
 				self.featVals[ph][b] = []
 			#Params
 			for p in self.paramNames_[ph]:
-				self.paramVals[ph][0][p] = []
-				self.paramVals[ph][1][p] = []
-				self.paramUpdate[ph][0][p] = []
-				self.paramUpdate[ph][1][p] = []
+				self.numParam_[p] = len(net[ph].params[p])
+				print (p, self.numParam_[p])
+				for i in range(self.numParam_[p]):	
+					self.paramVals[ph][i][p] = []
+					self.paramUpdate[ph][i][p] = []
 		return self
 
 	#Read the logging data from file
@@ -648,7 +651,7 @@ class CaffeNetLogger(object):
 				self.featVals[ph][b] = data[ph]['blobs'][b][0:idx]
 			self.paramNames_[ph] = data[ph]['params'].keys()
 			for k, p in enumerate(data[ph]['params'].keys()):
-				for i in range(2):
+				for i in range(self.numParam_[p]):
 					self.paramVals[ph][i][p]   = data[ph]['params'][p][i][0:idx]
 					self.paramUpdate[ph][i][p] = data[ph]['paramsUpdate'][p][i][0:idx]
 
@@ -838,7 +841,8 @@ class MySolver(object):
 			for b in self.log_.blobNames_[ph]:
 				self.log_.featVals[ph][b].append(np.mean(np.abs(self.net_[ph].blobs[b].data)))
 			for p in self.log_.paramNames_[ph]:
-				for i in range(2):
+				for i in range(self.log_.numParam_[p]):
+					#print (ph, p, i)
 					dat = np.mean(np.abs(self.net_[ph].params[p][i].data))
 					dif = np.mean(np.abs(self.net_[ph].params[p][i].diff))
 					self.log_.paramVals[ph][i][p].append(dat)	
@@ -862,7 +866,7 @@ class MySolver(object):
 			for p in self.log_.paramNames_[ph]:
 				data[ph]['params'][p]       = []
 				data[ph]['paramsUpdate'][p] = []
-				for i in range(2):
+				for i in range(self.log_.numParam_[p]):
 					data[ph]['params'][p].append(self.log_.paramVals[ph][i][p])	
 					data[ph]['paramsUpdate'][p].append(self.log_.paramVals[ph][i][p])
 		data['recFreq'] = self.recFreq_	

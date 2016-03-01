@@ -1986,8 +1986,8 @@ class CaffeTest:
 								imSz = [[channels, cropH, cropW]], 
 								batchSz = batchSz, delLayers = delLayers, delAbove=delAbove,
 								newDataLayerNames=newDataLayerNames)
-			fName = 'tmp/test_%s_deploy.prototxt' % defaultStr
-			ou.mkdir(fName)	
+			fName = 'tmp/test_%s_deploy.prototxt' % deployStr
+			ou.mkdir('tmp')	
 			pDef.write(fName)
 			self.netdef_ = fName
 		else:
@@ -2008,13 +2008,12 @@ class CaffeTest:
 				chSwap  = (2,1,0) 
 			numCh = len(chSwap)
 
-		if self.noPreprocess_:
-			#print (type(self.net_))
-			self.net_.set_preprocess(ipName = dataLayerNames[0], isBlobFormat=isBlobFormat,
-											imageDims = (imH, imW, channels),
-											cropDims  = (cropH, cropW), chSwap=chSwap,
-											rawScale = scale, meanDat = meanFile,
-											numCh = numCh)  
+		#print (type(self.net_))
+		self.net_.set_preprocess(ipName = dataLayerNames[0], isBlobFormat=isBlobFormat,
+										imageDims = (imH, imW, channels),
+										cropDims  = (cropH, cropW), chSwap=chSwap,
+										rawScale = scale, meanDat = meanFile,
+										numCh = numCh)  
 		self.ip_      = dataLayerNames[0]
 		self.op_      = opNames
 		self.batchSz_ = batchSz
