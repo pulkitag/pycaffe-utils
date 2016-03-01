@@ -338,7 +338,8 @@ class MyNet:
 			numCh      : number of channels
 		'''
 		if chSwap is not None:
-			assert len(chSwap) == numCh, 'Number of channels mismatch'
+			assert len(chSwap) == numCh, 'Number of channels mismatch (%d, %d)'\
+	              %(len(chSwap), numCh)
 		if noTransform:
 			self.transformer[ipName] = None
 			return
