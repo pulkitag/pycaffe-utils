@@ -166,14 +166,18 @@ def get_caffe_prms(nwFn=None, nwPrms={}, solFn=None,
 ##
 # Programatically make a Caffe Experiment. 
 class CaffeSolverExperiment:
-	def __init__(self, dPrms, cPrms, netDefFn=get_net_def, solverDefFn=get_solver_def, addFiles=None):
+	def __init__(self, dPrms, cPrms, 
+           netDefFn=get_net_def, solverDefFn=get_solver_def,
+           isLog=True,  addFiles=None):
 		'''
 			dPrms:         dict containing key 'expStr' and 'paths'
 										 contains dataset specific parameters
 			cPrms:         dict contraining 'expStr', 'resumeIter', 'nwPrms'
 									 	 contains net and sovler specific parameters
-			addFiles:      if additional files need to be stored - not imple                      mented yet
+			isLog:         if logging data should be recorded
+			addFiles:      if additional files need to be stored - not implemented yet
 		'''
+		self.isLog_        = isLog
 		dataExpName        = dPrms['expStr']
 		caffeExpName       = cPrms['expStr']
 		expDirPrefix       = dPrms.paths.exp.dr
@@ -307,7 +311,8 @@ class CaffeSolverExperiment:
 		self.expFile_.solDef_.write(self.files_['solver'])
 		#Create the solver	
 		self.solver_ = mp.MySolver.from_file(self.files_['solver'],
-									 dumpLogFreq=dumpLogFreq, logFile=self.files_['log'])
+									 dumpLogFreq=dumpLogFreq, logFile=self.files_['log'],
+                   isLog=self.isLog_)
 		if self.preTrainNet_ is not None:
 			assert (self.resumeIter_ is None)
 			self.solver_.copy_weights(self.preTrainNet_)
