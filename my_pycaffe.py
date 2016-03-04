@@ -651,7 +651,8 @@ class CaffeNetLogger(object):
 				self.featVals[ph][b] = data[ph]['blobs'][b][0:idx]
 			self.paramNames_[ph] = data[ph]['params'].keys()
 			for k, p in enumerate(data[ph]['params'].keys()):
-				for i in range(self.numParam_[p]):
+				#for i in range(self.numParam_[p]):
+				for i in range(1):
 					self.paramVals[ph][i][p]   = data[ph]['params'][p][i][0:idx]
 					self.paramUpdate[ph][i][p] = data[ph]['paramsUpdate'][p][i][0:idx]
 
@@ -742,13 +743,15 @@ class MySolver(object):
 	def __init__(self):
 		self.solver_ = None
 		self.phase_  = ['train', 'test']
+		self.isLog_  = True
 
 	def __del__(self):
 		del self.solver_
 		del self.net_
 
 	@classmethod
-	def from_file(cls, solFile, recFreq=20, dumpLogFreq=None, logFile='default_log.pkl'):
+	def from_file(cls, solFile, recFreq=20, dumpLogFreq=None,
+                logFile='default_log.pkl', isLog=True):
 		'''
 			solFile    : solver prototxt from which to load the net
 			recFreq    : the frequency of recording
@@ -758,7 +761,8 @@ class MySolver(object):
 		self.solFile_    = solFile
 		self.logFile_    = logFile
 		self.recFreq_    = recFreq
-		self.dumpLogFreq_= dumpLogFreq 
+		self.dumpLogFreq_= dumpLogFreq
+		self.isLog_      = isLog 
 		self.setup_solver()
 		self.plotSetup_  = False
 		return self	
@@ -821,15 +825,17 @@ class MySolver(object):
 		if numSteps is None:
 			numSteps = self.maxIter_
 		for i in range(numSteps):
-			if np.mod(self.solver_.iter, self.recFreq_)==0:
-				self.record_feats_params(phases=['train'])
-				self.log_.recIter_['train'].append(self.solver_.iter)
-			if np.mod(self.solver_.iter, self.testInterval_)==0:
-				self.record_feats_params(phases=['test'])
-				self.log_.recIter_['test'].append(self.solver_.iter)
+			if self.isLog_:
+				if np.mod(self.solver_.iter, self.recFreq_)==0:
+					self.record_feats_params(phases=['train'])
+					self.log_.recIter_['train'].append(self.solver_.iter)
+				if np.mod(self.solver_.iter, self.testInterval_)==0:
+					self.record_feats_params(phases=['test'])
+					self.log_.recIter_['test'].append(self.solver_.iter)
 			self.solver_.step(1)
-			if np.mod(self.solver_.iter, self.dumpLogFreq_)==0:
-				self.dump_to_file()
+			if self.isLog_:
+				if np.mod(self.solver_.iter, self.dumpLogFreq_)==0:
+					self.dump_to_file()
 	##
 	#Record the data
 	def record_feats_params(self, phases=None):
@@ -871,6 +877,7 @@ class MySolver(object):
 					data[ph]['paramsUpdate'][p].append(self.log_.paramVals[ph][i][p])
 		data['recFreq'] = self.recFreq_	
 		data['recIter'] = self.log_.recIter_
+		data['numParam'] = self.log_.numParam_
 		pickle.dump(data, open(self.logFile_, 'w'))
 		t = time.time() - t1
 		print ('$$$$$$$$$$$$ TIME TO DUMP %f' % t)
