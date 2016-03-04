@@ -30,6 +30,8 @@ def get_default_net_prms(dbFile=DEF_DB, **kwargs):
 	dArgs.batchSize   = None
 	#runNum
 	dArgs.runNum      = 0
+	#debugMode
+	dArgs.debugMode   = False
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
 	dArgs.expStr      = get_sql_id(dbFile, dArgs)
 	return dArgs
@@ -164,12 +166,13 @@ def get_caffe_prms(nwFn=None, nwPrms={}, solFn=None,
 ##
 # Programatically make a Caffe Experiment. 
 class CaffeSolverExperiment:
-	def __init__(self, dPrms, cPrms, netDefFn=get_net_def, solverDefFn=get_solver_def):
+	def __init__(self, dPrms, cPrms, netDefFn=get_net_def, solverDefFn=get_solver_def, addFiles=None):
 		'''
 			dPrms:         dict containing key 'expStr' and 'paths'
 										 contains dataset specific parameters
 			cPrms:         dict contraining 'expStr', 'resumeIter', 'nwPrms'
 									 	 contains net and sovler specific parameters
+			addFiles:      if additional files need to be stored - not imple                      mented yet
 		'''
 		dataExpName        = dPrms['expStr']
 		caffeExpName       = cPrms['expStr']

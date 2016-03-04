@@ -2,6 +2,14 @@ This repository provides utilities for conveniently defining and running deep le
 
 Note: This README is being constantly updated and currently covers only a few functions provided as part of pycaffe-utils.
 
+Dependencies
+-------------
+This is not an exhaustive list. 
+```
+sudo apt-get install liblmdb-dev
+sudo pip install lmdb
+```
+
 
 Setting up a Caffe Experiment
 ----------------------------------
