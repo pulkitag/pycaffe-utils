@@ -128,6 +128,12 @@ def get_solver_def(solPrms):
 		solDef = mpu.Solver.from_file(solPrms)	
 	else:
 		del solPrms['baseSolDefFile']
+		solDef = mpu.make_solver(**solPrms)	
+	return solDef
+
+##
+#Make Solver
+def get_net_def(dPrms, nwPrms):
 	'''
 		dPrms : data parameters
 		nwPrms: parameters that define the net 
