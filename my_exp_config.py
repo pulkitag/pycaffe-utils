@@ -12,8 +12,16 @@ import my_sqlite as msq
 REAL_PATH = os.path.dirname(os.path.realpath(__file__))
 DEF_DB    = osp.join(REAL_PATH, 'test_data/default-exp-db.sqlite')
 
-#Legacy reasons
-get_sql_id = msq.get_sql_id
+def get_sql_id(dbFile, dArgs, ignoreKeys=[]):
+	sql    = msq.SqDb(dbFile)
+	#try: 
+	sql.fetch(dArgs, ignoreKeys=ignoreKeys)
+	idName = sql.get_id(dArgs, ignoreKeys=ignoreKeys)
+	#except:
+	#	sql.close()
+	#	raise Exception('Error in fetching a name from database')
+	sql.close()
+	return idName	 
 
 
 def get_default_net_prms(dbFile=DEF_DB, **kwargs):
@@ -30,8 +38,6 @@ def get_default_net_prms(dbFile=DEF_DB, **kwargs):
 	dArgs.batchSize   = None
 	#runNum
 	dArgs.runNum      = 0
-	#debugMode
-	dArgs.debugMode   = False
 	dArgs = mpu.get_defaults(kwargs, dArgs, False)
 	dArgs.expStr      = get_sql_id(dbFile, dArgs)
 	return dArgs
@@ -122,12 +128,6 @@ def get_solver_def(solPrms):
 		solDef = mpu.Solver.from_file(solPrms)	
 	else:
 		del solPrms['baseSolDefFile']
-		solDef = mpu.make_solver(**solPrms)	
-	return solDef
-
-##
-#Make Solver
-def get_net_def(dPrms, nwPrms):
 	'''
 		dPrms : data parameters
 		nwPrms: parameters that define the net 
@@ -182,7 +182,9 @@ class CaffeSolverExperiment:
 		caffeExpName       = cPrms['expStr']
 		expDirPrefix       = dPrms.paths.exp.dr
 		snapDirPrefix      = dPrms.paths.exp.snapshot.dr
-		#Relevant directories. 
+		#Relevant directories.
+		self.dPrms_ = copy.deepcopy(dPrms)
+		self.cPrms_ = copy.deepcopy(cPrms) 
 		self.dirs_  = {}
 		self.dirs_['exp']  = osp.join(expDirPrefix,  dataExpName)
 		self.dirs_['snap'] = osp.join(snapDirPrefix, dataExpName)  
