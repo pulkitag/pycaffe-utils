@@ -264,18 +264,18 @@ class CaffeSolverExperiment:
 		'''
 			Find the name with which models are being stored. 
 		'''
-		assert self.solDef_ is not None, 'Solver has not been formed'
-		snapshot   = self.solDef_.get_property('snapshot_prefix')
+		assert self.expFile_.solDef_ is not None, 'Solver has not been formed'
+		snapshot   = self.expFile_.solDef_.get_property('snapshot_prefix')
 		#_iter_%d.caffemodel is added by caffe while snapshotting. 
-		snapshotName = snapshot[1:-1] + '_iter_%d.caffemodel'
-		snapshotName = ou.chunk_filename(snapshotName)
+		snapshotName = snapshot[1:-1] + '_iter_%d.caffemodel' % numIter
+		snapshotName = ou.chunk_filename(snapshotName) 
 		#solver file
-		solverName   = snapshot[1:-1] + '_iter_%d.solverstate'
-		solverName   = ou.chunk_filename(snapshotName)	
+		solverName   = snapshot[1:-1] + '_iter_%d.solverstate' % numIter
+		solverName   = ou.chunk_filename(solverName)	
 		if getSolverFile:
 			return solverName
 		else:	
-			return snapshot
+			return snapshotName
 
 
 	## Only finetune the layers that are above ( and including) layerName
@@ -332,7 +332,7 @@ class CaffeSolverExperiment:
 	
 	## Make the deploy file. 
 	def make_deploy(self, dataLayerNames, imSz, **kwargs):
-		self.deployProto_ = ProtoDef.deploy_from_proto(self.expFile_.netDef_,
+		self.deployProto_ = mpu.ProtoDef.deploy_from_proto(self.expFile_.netDef_,
 									 dataLayerNames=dataLayerNames, imSz=imSz, **kwargs)
 		self.deployProto_.write(self.files_['netdefDeploy'])
 	
