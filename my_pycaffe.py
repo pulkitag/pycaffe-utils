@@ -720,7 +720,7 @@ class CaffeNetLogger(object):
 				plt.show()
 
 	#Only plot the losses
-	def	plot_loss(self, ax=None, layerNames=[]):
+	def	plot_loss(self, ax=None, layerNames=[], ylim=None):
 		if not self.isRead_:
 			self.read()
 		plt.ion()
@@ -736,6 +736,8 @@ class CaffeNetLogger(object):
 				elif len(layerNames) >0 and layerNames[0] in bn:
 					ax.plot(np.array(self.recIter_[ph]), self.featVals[ph][bn], colors[p])
 					ax.set_title(bn)
+		if ylim is not None:
+			ax.set_ylim(ylim)
 		plt.show()
 		plt.draw()	
 		return ax

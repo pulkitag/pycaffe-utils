@@ -337,7 +337,9 @@ class CaffeSolverExperiment:
 		self.deployProto_.write(self.files_['netdefDeploy'])
 	
 	## Get the deploy proto
-	def get_deploy_proto(self):	
+	def get_deploy_proto(self):
+		if not(osp.exists(self.files_['netdefDeploy'])):
+			self.make_deploy,	
 		return self.deployProto_
 
 	## Get deploy file
