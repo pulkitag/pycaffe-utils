@@ -14,7 +14,8 @@ DEF_DB    = osp.join(REAL_PATH, 'test_data/default-exp-db.sqlite')
 
 def get_sql_id(dbFile, dArgs, ignoreKeys=[]):
 	sql    = msq.SqDb(dbFile)
-	#try: 
+	#try:
+	#print ('Ignore KEYS: ', ignoreKeys) 
 	sql.fetch(dArgs, ignoreKeys=ignoreKeys)
 	idName = sql.get_id(dArgs, ignoreKeys=ignoreKeys)
 	#except:

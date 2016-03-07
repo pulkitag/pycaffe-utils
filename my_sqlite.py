@@ -119,6 +119,7 @@ class SqDb(object):
 				delKeys.append(k)
 		for k in delKeys:
 			del vals[k]
+		#print (vals, 'ignore', ignoreKeys)
 		return vals 
 
 	#Create table
