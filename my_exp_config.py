@@ -326,7 +326,8 @@ class CaffeSolverExperiment:
 			assert (self.resumeIter_ is None)
 			self.solver_.copy_weights(self.preTrainNet_)
 		if self.resumeIter_ is not None:
-			solverStateFile = self.get_snapshot_name(snapName, getSolverFile=True)
+			solverStateFile = self.get_snapshot_name(self.resumeIter_, getSolverFile=True)
+			assert osp.exists(solverStateFile), '%s not present' % solverStateFile
 			self.solver_.restore(solverStateFile)
 		self.expMake_ = True
 	
