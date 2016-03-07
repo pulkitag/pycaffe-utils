@@ -731,13 +731,14 @@ class CaffeNetLogger(object):
 		for p, ph in enumerate(self.phase_):
 			for i, bn in enumerate(self.blobNames_[ph]):
 				if len(layerNames) == 0 and 'loss' in bn:
-					ax.plot(np.array(self.recIter_[ph]), self.featVals[ph][bn], colors[p])
+					ax.plot(np.array(self.recIter_[ph][1:]), self.featVals[ph][bn][1:], colors[p])
 					ax.set_title(bn)
-				elif layerNames[0] in bn:
+				elif len(layerNames) >0 and layerNames[0] in bn:
 					ax.plot(np.array(self.recIter_[ph]), self.featVals[ph][bn], colors[p])
 					ax.set_title(bn)
 		plt.show()
 		plt.draw()	
+		return ax
 
 class MySolver(object):
 	def __init__(self):
