@@ -8,6 +8,7 @@ import collections as co
 import pickle
 import copy
 from os import path as osp
+import pdb
 
 def type2str(typ):
 	if typ in [float]:
@@ -171,11 +172,20 @@ class SqDb(object):
 			for ok, ov in o.iteritems():
 				if ok == '_mysqlid':
 					continue
+				#If there is a key with non "None" value in search
 				if not(ok in vals.keys()) and not(ov == None):
 					appendFlag = False
 					break
+				#If values are not the same
+				if ok in vals.keys() and ok not in ignoreKeys:
+					if not(vals[ok] == ov):
+						#print (vals[ok], ov, ok)
+						appendFlag = False
+						break
 			if appendFlag:
 				idx.append(i)
+		if len(idx) > 1:
+			pdb.set_trace()
 		assert (len(idx))<=1, idx
 		if len(idx) == 1:
 			return [out[idx[0]]]
