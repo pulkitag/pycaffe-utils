@@ -118,6 +118,7 @@ class SqDb(object):
 		for k, v in vals.iteritems():
 			if v is None:
 				delKeys.append(k)
+		delKeys = list(set(delKeys))
 		for k in delKeys:
 			del vals[k]
 		#print (vals, 'ignore', ignoreKeys)
