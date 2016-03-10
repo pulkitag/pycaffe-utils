@@ -637,6 +637,7 @@ class CaffeNetLogger(object):
 		else:
 			print ('%s doesnot exist, please specify a log file name' % self.logFile_)
 			return
+		print ('Loading log from: %s' % fName)
 		data = pickle.load(open(fName, 'r'))
 		self.recIter_ = data['recIter']
 		for ph in self.phase_:
@@ -720,7 +721,7 @@ class CaffeNetLogger(object):
 				plt.show()
 
 	#Only plot the losses
-	def	plot_loss(self, ax=None, layerNames=[]):
+	def	plot_loss(self, ax=None, layerNames=[], ylim=None):
 		if not self.isRead_:
 			self.read()
 		plt.ion()
@@ -736,6 +737,8 @@ class CaffeNetLogger(object):
 				elif len(layerNames) >0 and layerNames[0] in bn:
 					ax.plot(np.array(self.recIter_[ph]), self.featVals[ph][bn], colors[p])
 					ax.set_title(bn)
+		if ylim is not None:
+			ax.set_ylim(ylim)
 		plt.show()
 		plt.draw()	
 		return ax
@@ -809,8 +812,9 @@ class MySolver(object):
 			fName: the name of the file from which solver needs to be resumed.
 		'''
 		self.solver_.restore(fName)
-		if osp.exists(self.logFile_):
-			self.log_.read(self.logFile_, maxIter=restoreIter)
+		#if osp.exists(self.logFile_):
+		#self.log_.read(self.logFile_, maxIter=restoreIter)
+		self.log_.read(maxIter=restoreIter)
 	
 	##
 	#Copy weights from a net file
