@@ -424,7 +424,7 @@ class MyNet:
 		ims = ims.astype(np.float32)
 		if self.transformer[ipName] is None:
 			ims = self.resize_batch(ims)
-			return ims
+			return ims.astype(np.float32)
 
 		if np.max(ims)<=1.0:
 			print "There maybe issues with image scaling. The maximum pixel value is 1.0 and not 255.0"
