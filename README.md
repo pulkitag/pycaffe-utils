@@ -65,7 +65,7 @@ If a deep network is not training, it is instructive to look at how the paramete
 
 of all the blobs in the net using the following code snippet
 
-<pre><code>
+```python
 import my_pycaffe as mp
 #Define the solver using caffe style solver prototxt
 sol      = mp.MySolver.from_file(solver_prototxt)
@@ -79,9 +79,15 @@ for r in range(0, maxIter, saveIter):
     sol.solve(saveIter)
     #Save the log file
     sol.dump_to_file(logFile)
-</code></pre>
-
+```
 The logged values can be easily plotted using, `sol.plot()`
+
+To restore from a solver state
+```python
+#fName      : the .solverstate file name
+#restoreIter: the iteration from which the log should be restored. 
+sol.restore(fName, restoreIter)
+```
 
 
 Creating a Siamese prototxt file for Caffe
