@@ -33,8 +33,6 @@ def get_default_net_prms(dbFile=DEF_DB, **kwargs):
 	dArgs.lrAbove     = None
 	#If weights from a pretrained net are to be used
 	dArgs.preTrainNet = None
-	#If resuming from a solver state
-	dArgs.resumeIter  = None
 	#The base proto from which net will be constructed
 	dArgs.baseNetDefProto = None
 	#Batch size
@@ -119,7 +117,7 @@ def get_default_solver_prms(dbFile=DEF_DB, **kwargs):
 	dArgs        = mpu.get_defaults(kwargs, dArgs, False)
 	dArgs.expStr = 'solprms' + get_sql_id(dbFile, dArgs,
 									ignoreKeys=['test_iter',  'test_interval',
-								 'snapshot', 'display'])
+								 'snapshot', 'display', 'resumeIter'])
 	return dArgs 
 
 ##
@@ -324,13 +322,14 @@ class CaffeSolverExperiment:
 		self.solver_ = mp.MySolver.from_file(self.files_['solver'],
 									 dumpLogFreq=dumpLogFreq, logFile=self.files_['log'],
                    isLog=self.isLog_)
-		if self.preTrainNet_ is not None:
-			assert (self.resumeIter_ is None)
-			self.solver_.copy_weights(self.preTrainNet_)
+
 		if self.resumeIter_ is not None:
 			solverStateFile = self.get_snapshot_name(self.resumeIter_, getSolverFile=True)
 			assert osp.exists(solverStateFile), '%s not present' % solverStateFile
 			self.solver_.restore(solverStateFile)
+		elif self.preTrainNet_ is not None:
+			assert (self.resumeIter_ is None)
+			self.solver_.copy_weights(self.preTrainNet_)
 		self.expMake_ = True
 	
 	## Make the deploy file. 
