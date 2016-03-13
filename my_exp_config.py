@@ -117,7 +117,7 @@ def get_default_solver_prms(dbFile=DEF_DB, **kwargs):
 	dArgs        = mpu.get_defaults(kwargs, dArgs, False)
 	dArgs.expStr = 'solprms' + get_sql_id(dbFile, dArgs,
 									ignoreKeys=['test_iter',  'test_interval',
-								 'snapshot', 'display', 'resumeIter'])
+								 'snapshot', 'display'])
 	return dArgs 
 
 ##
