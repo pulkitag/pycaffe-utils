@@ -33,6 +33,8 @@ def get_default_net_prms(dbFile=DEF_DB, **kwargs):
 	dArgs.lrAbove     = None
 	#If weights from a pretrained net are to be used
 	dArgs.preTrainNet = None
+	#If resuming from a solver state
+	dArgs.resumeIter  = None
 	#The base proto from which net will be constructed
 	dArgs.baseNetDefProto = None
 	#Batch size
@@ -139,10 +141,10 @@ def get_net_def(dPrms, nwPrms):
 		dPrms : data parameters
 		nwPrms: parameters that define the net 
 	'''
-	if nwPrms.baseDefProto is None:
+	if nwPrms.baseNetDefProto is None:
 		return None
 	else:
-		netDef = mpu.ProtoDef(nwPrms.baseDefProto) 
+		netDef = mpu.ProtoDef(nwPrms.baseNetDefProto) 
 	return netDef
 
 

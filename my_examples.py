@@ -1,5 +1,6 @@
 import my_exp_config as mec
 from easydict import EasyDict as edict
+from os import path as osp
 
 ####### EXAMPLE 1 - CONFIGURING AN MNIST EXPERIMENT #########
 ##
@@ -23,12 +24,12 @@ def get_mnist_prms():
 	return prms
 
 ##
-#Setup the experiment
+#Setup a scratch experiment
 def setup_experiment():
 	prms    = get_mnist_prms()
 	nwPrms  = {'netName': 'MyNet', 
 						 'baseNetDefProto': 'trainval.prototxt'}
-	cPrms   = mec.get_solver_caffe_prms(mec.get_default_net_prms, nwPrms, 
+	cPrms   = mec.get_caffe_prms(mec.get_default_net_prms, nwPrms, 
 						mec.get_default_solver_prms,
 						baseDefDir='./test_data/mnist')	
 	exp     = mec.CaffeSolverExperiment(prms, cPrms)
@@ -36,3 +37,20 @@ def setup_experiment():
 	return exp
 
 ####### END OF EXAMPLE 1 ###################
+
+####### Example 2 - FINETUNING MNIST EXPERIMENT ###########
+def setup_experiment_finetune():
+	prms        = get_mnist_prms()
+	preTrainNet = './test_data/mnist/mnist-test_iter_4000.caffemodel'
+	#preTrainNet = None
+	baseDefDir   ='./test_data/mnist'
+	nwPrms  = {'netName': 'MyNet', 
+						 'baseNetDefProto': osp.join(baseDefDir, 'trainval.prototxt'),
+             'preTrainNet': preTrainNet}
+	cPrms   = mec.get_caffe_prms(mec.get_default_net_prms, nwPrms, 
+						mec.get_default_solver_prms)
+	exp     = mec.CaffeSolverExperiment(prms, cPrms)
+	exp.make()
+	return exp
+
+####### END OF EXAMPLE 2 ###################
