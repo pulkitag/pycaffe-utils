@@ -207,30 +207,33 @@ def read_crop_im(imName, bbox, **kwargs):
 
 ##
 # Makes a table from dict
-def make_table(**kwargs):
+def make_table(keyOrder=None, colWidth=15, **kwargs):
 	'''
 		kwargs should contains keys and lists as the values.
 		Each dictionaty will be plotted as a column.
 	'''
-	for i,key in enumerate(kwargs.keys()):
+	if keyOrder is None:
+		keyOrder = kwargs.keys()
+
+	for i,key in enumerate(keyOrder):
 		if i==0:
 			L = len(kwargs[key])
 		else:
 			assert L == len(kwargs[key]), 'Wrong length for %s' % key
 
-	N = len(kwargs.keys())
-	formatStr = "{:<15} "
+	N = len(keyOrder)
+	formatStr = "{:<%d} " % colWidth
 	lines = []
-	lines.append(''.join(formatStr.format(k) for k in kwargs.keys()) + '\n')
+	lines.append(''.join(formatStr.format(k) for k in keyOrder) + '\n')
 	lines.append('-' * 15 * N + '\n')
 
 	for i in range(L):
 		line = ''
-		for key in kwargs.keys():
+		for key in keyOrder:
 			if isinstance(kwargs[key][i], int):
 				fStr = '%d'
-			elif isinstance(kwargs[key][i], np.float32) or isinstance(kwargs[key][i], np.float64):
-				fStr = '%.3f'
+			elif type(kwargs[key][i]) in [float, np.float32, np.float64]:
+				fStr = '%.1f'
 			elif isinstance(kwargs[key][i], str):
 				fStr = '%s'
 			else:
