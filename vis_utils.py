@@ -10,6 +10,7 @@ import os
 import caffe
 import pdb
 import my_pycaffe as mp
+import my_pycaffe_io as mpio
 import scipy
 
 TMP_DATA_DIR = '/data1/pulkitag/others/caffe_tmp_data/'
@@ -102,7 +103,7 @@ def vis_generic_window_data(protoDef, numLabels, layerName='window_data', phase=
 	labelName = protoDef.get_layer_property(layerName, 'top', propNum=1)[1:-1]
 	crpSize   = int(protoDef.get_layer_property(layerName, ['crop_size']))
 	mnFile    = protoDef.get_layer_property(layerName, ['mean_file'])[1:-1]
-	mnDat     = mp.read_mean(mnFile)
+	mnDat     = mpio.read_mean(mnFile)
 	ch,nr,nc  = mnDat.shape
 	xMn       = int((nr - crpSize)/2)
 	mnDat     = mnDat[:,xMn:xMn+crpSize,xMn:xMn+crpSize]

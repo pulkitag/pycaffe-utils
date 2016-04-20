@@ -27,6 +27,19 @@ else:
 	MATLAB_PATH = ''
 
 
+def read_mean(protoFileName):
+  '''
+    Reads mean from the protoFile
+  '''
+  with open(protoFileName,'r') as fid:
+    ss = fid.read()
+    vec = caffe.io.caffe_pb2.BlobProto()
+    vec.ParseFromString(ss)
+    mn = caffe.io.blobproto_to_array(vec)
+  mn = np.squeeze(mn)
+  return mn
+ 
+
 ## 
 # Write array as a proto
 def  write_proto(arr, outFile):
@@ -757,8 +770,192 @@ class SqBoxWindowReader:
 	def close(self):
 		self.fid_.close()
 
+def red_col_sel(col):
+  if col[0] < 0.6:
+    return False
+  else:
+    return True
 
+#READ PCD Files
+class PCDReader(object):
+  def __init__(self, fName=None, keepNaN=False, subsample=None, colsel=None, fromFile=True):
+    self.fName = fName
+    self.ax_   = None
+    if fromFile:
+      self.read(keepNaN=keepNaN,subsample=subsample, colsel=colsel)
 
+  @classmethod
+  def from_pts(cls, pts, subsample=0.2):
+    self = cls(None, fromFile=False)
+    N       = pts.shape[0]
+    pts     = pts.copy()
+    if subsample is not None:
+      perm = np.random.permutation(N)
+      perm = perm[0:int(subsample*N)]
+      pts  = pts[perm]
+    self.x_ = pts[:,0]
+    self.y_ = pts[:,1]
+    self.z_ = pts[:,2]
+    self.c_ = pts[:,3:6]
+    return self 
+ 
+  @classmethod
+  def from_db(cls, dbPath):
+    self     = cls(None, fromFile=False)
+    self.db_ = DbReader(dbPath)
+    return self
+
+  def read_next(self, subSample=None):
+    dat,_ = self.db_.read_next()
+    if dat is None:
+      return None
+    dat       = dat.transpose((1,0,2))
+    nr, nc, _ = dat.shape
+    if subSample is None:
+      subSample=1
+    rows      = range(0, nr, subSample)
+    cols      = range(0, nc, subSample)
+    xIdx, yIdx = np.meshgrid(cols, rows)
+    dat       = dat[yIdx, xIdx]
+    self.x_ = dat[:,:,0]
+    self.y_ = dat[:,:,1]
+    self.z_ = dat[:,:,2]
+    self.c_ = dat[:,:,3:6]
+    return True
+  
+  def get_mask(self): 
+    nanMask = np.isnan(self.z_) 
+    d       = self.z_.copy()
+    d[nanMask] = -10
+    d   = d + 0.255
+    self.mask_     = d > 0
+ 
+  def to_rgbd(self):
+    self.get_mask()
+    im  = (self.c_.copy() * 255).astype(np.uint8)
+    d   = self.z_.copy()
+    d[~self.mask_] = 0.0
+    assert np.max(d) < 0.1, np.max(d)
+    d[self.mask_] = 255 * (d[self.mask_]/0.1) 
+    d        = d.astype(np.uint8)
+    print (np.min(d), np.max(d))
+    return im, d
+
+  def get_masked_pts(self):
+    self.get_mask()
+    N   = np.sum(self.mask_)
+    pts = np.zeros((N,6), np.float32)
+    pts[:,0] = 10*self.x_[self.mask_].reshape(N,)
+    pts[:,1] = 10*self.y_[self.mask_].reshape(N,)
+    pts[:,2] = 10*self.z_[self.mask_].reshape(N,)
+    pts[:,3:6] = self.c_[self.mask_,0:3].reshape(N,3)    
+    return pts
+
+  def save_rgbd(self, dirName=''):
+    count = 0
+    imName = osp.join(dirName, 'im%06d.png')
+    dpName = osp.join(dirName, 'dp%06d.png')
+    while True:
+      isExist = self.read_next()
+      if isExist is None:
+        break
+      im, d = self.to_rgbd()
+      print im.shape, d.shape
+      ou.mkdir(osp.dirname(imName)) 
+      scm.imsave(imName % (count+1), im)
+      scm.imsave(dpName % (count+1), d)
+      count += 1
+       
+  def plot_next_rgbd(self):
+    import matplotlib.pyplot as plt
+    self.read_next()
+    im, d = self.to_rgbd()
+    if self.ax_ is None:
+      self.ax_ = []
+      plt.ion()
+      fig = plt.figure()
+      self.ax_.append(fig.add_subplot(121))
+      self.ax_.append(fig.add_subplot(122))
+    self.ax_[0].imshow(im)
+    self.ax_[1].imshow(d)  
+    plt.draw()
+    plt.show()
+
+  def read(self, keepNaN=False, subsample=None, colsel=None):
+    with open(self.fName, 'r') as fid:
+      lines = fid.readlines()
+    for i, l in enumerate(lines):
+      if i<=8:
+        continue
+      if i==9:
+        N = int(l.strip().split()[1])
+        break
+    lines = lines[11:]
+    assert len(lines)==N
+    self.x_ = np.zeros((N,), np.float32) 
+    self.y_ = np.zeros((N,), np.float32) 
+    self.z_ = np.zeros((N,), np.float32)
+    self.c_ = np.zeros((N,3), np.float32)
+    count   = 0 
+    for i,l in enumerate(lines):
+      if subsample is not None:
+        if not np.mod(i, subsample) == 0:
+          continue
+      x, y, z, rgb = l.strip().split()
+      nanVal = False
+      if x=='nan' or y=='nan' or z=='nan':
+        nanVal = True
+      if not keepNaN and nanVal:
+        continue
+      #col = np.array([np.float32(rgb)])
+      col =  np.array([np.float64(rgb)], np.float32)
+      col = (col.view(np.uint8)[0:3])/256.0
+      #to rgb
+      col = np.array((col[2], col[1], col[0]))
+      if nanVal:
+        col = np.array((0,0,1.0))
+      if colsel is not None:
+        isValid = colsel(col)
+        if not isValid:
+          continue
+      self.x_[count] = float(x)
+      self.y_[count] = float(y)
+      self.z_[count] = float(z)
+      self.c_[count] = col
+      count += 1
+    self.x_ = self.x_[0:count]
+    self.y_ = self.y_[0:count]
+    self.z_ = self.z_[0:count]
+    self.c_ = self.c_[0:count]
+    self.N_ = count
+
+  def get_rgb_im(self):
+    im = np.zeros((480, 640, 3)).astype(np.uint8)
+    count = 0
+    for r in range(480): 
+      for c in range(640):
+        im[r, c] = (255 * self.c_[count].reshape((1,1,3))).astype(np.uint8)
+        count += 1
+    return im
+
+  def matplot(self, ax=None):
+    import matplotlib.pyplot as plt
+    if ax is None:
+      from mpl_toolkits.mplot3d import Axes3D
+      plt.ion()
+      fig = plt.figure()
+      ax  = fig.add_subplot(111, projection='3d')
+    #perm = np.random.permutation(self.x_.shape[0])
+    #perm = perm[0:5000]
+    perm  = np.array(range(self.x_.shape[0]))
+    for i in range(1):
+      #ax.scatter(self.x_, self.y_, self.z_, 
+      #   c=tuple(np.random.rand(self.N_,3)))
+      ax.scatter(self.x_[perm], self.y_[perm], self.z_[perm], 
+         c=tuple(self.c_[perm]))
+    plt.draw()
+    plt.show()
+    
 	
 def save_lmdb_images(ims, dbFileName, labels=None, asFloat=False):
 	'''

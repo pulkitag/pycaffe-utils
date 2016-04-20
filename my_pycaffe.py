@@ -12,6 +12,7 @@ from six import string_types
 import copy
 from easydict import EasyDict as edict 
 import my_pycaffe_utils as mpu
+import my_pycaffe_io as mpio
 import pickle
 import collections as co
 import time
@@ -20,7 +21,6 @@ try:
 except:
 	print ('WARNING: h5py not found, some functions may not work')
 	
-
 class layerSz:
 	def __init__(self, stride, filterSz):
 		self.imSzPrev = [] #We will assume square images for now
@@ -265,18 +265,7 @@ def get_input_blob_shape(defFile):
 	return blobShape
 
 				
-def read_mean(protoFileName):
-	'''
-		Reads mean from the protoFile
-	'''
-	with open(protoFileName,'r') as fid:
-		ss = fid.read()
-		vec = caffe.io.caffe_pb2.BlobProto()
-		vec.ParseFromString(ss)
-		mn = caffe.io.blobproto_to_array(vec)
-	mn = np.squeeze(mn)
-	return mn
-
+	
 
 class MyNet:
 	def __init__(self, defFile, modelFile=None, isGPU=True, testMode=True, deviceId=None):
@@ -378,7 +367,7 @@ class MyNet:
 		if not meanDat is None:
 			isTuple = False
 			if isinstance(meanDat, string_types):
-				meanDat = read_mean(meanDat)
+				meanDat = mpio.read_mean(meanDat)
 			elif type(meanDat) ==  tuple:
 				meanDat = np.array(meanDat).reshape(numCh,1,1)
 				meanDat = meanDat * (np.ones((numCh, self.crop[2] - self.crop[0],\
@@ -975,7 +964,7 @@ def setup_prototypical_network(netName='vgg', layerName='pool4'):
 	'''
 	modelFile, meanFile = get_model_mean_file(netName)
 	defFile             = get_layer_def_files(netName, layerName=layerName)
-	meanDat             = read_mean(meanFile)
+	meanDat             = mpio.read_mean(meanFile)
 	net                 = MyNet(defFile, modelFile)
 	net.set_preprocess(ipName='data', meanDat=meanDat, imageDims=(256,256,3))
 	return net	
@@ -1114,7 +1103,7 @@ def test_network_siamese_h5(imH5File=[], lbH5File=[], netFile=[], defFile=[], im
 	#Get the mean
 	imMean = []
 	if not meanFile == []:
-		imMean = read_mean(meanFile)	
+		imMean = mpio.read_mean(meanFile)	
 
 	#Initialize network
 	net  = MyNet(defFile, netFile, deviceId=deviceId)
@@ -1174,6 +1163,7 @@ def test_network_siamese_h5(imH5File=[], lbH5File=[], netFile=[], defFile=[], im
 		
 	confMat = compute_error(gtLabels, labels, 'classify')
 	return confMat, labels, gtLabels	
+
 '''
 
 def read_mean_txt(fileName):
