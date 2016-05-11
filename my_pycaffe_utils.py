@@ -266,218 +266,227 @@ def get_proto_dict(protoType, key, **kwargs):
 ##
 # Generate String for writing down a protofile for a layer. 
 def get_layerdef_for_proto(layerType, layerName, bottom, numOutput=1, **kwargs):
-	'''
-		I recommend the following strategy for making layers:
-			a. Make the basic layer architecture using this function.
-			b. Modify this architecture as needed to change the layers. 
-		
-		##numOutput is depreciated. Instead use num_output in kwargs
-		##kwargs will override all other parameters
+  '''
+    I recommend the following strategy for making layers:
+      a. Make the basic layer architecture using this function.
+      b. Modify this architecture as needed to change the layers. 
+    
+    ##numOutput is depreciated. Instead use num_output in kwargs
+    ##kwargs will override all other parameters
 
-	'''
-	layerDef = co.OrderedDict()
-	layerDef['name']  = '"%s"' % layerName
-	layerDef['type']  = '"%s"' % layerType
-	layerDef['bottom'] =	'"%s"' % bottom
-	#The prms for different layers. 
-	if layerType == 'InnerProduct':
-		layerDef['top']    = '"%s"' % layerName
-		layerDef['param'] = get_proto_dict('param_w', 'param', **kwargs)
-		paramDup = make_key('param', layerDef.keys())
-		layerDef[paramDup] = get_proto_dict('param_b', paramDup, **kwargs)
-		ipKey = 'inner_product_param'
-		layerDef[ipKey]  = co.OrderedDict()
-		if kwargs.has_key('num_output'):
-			layerDef[ipKey]['num_output'] = kwargs['num_output']
-		else:
-			layerDef[ipKey]['num_output'] = str(numOutput)
-		layerDef[ipKey]['weight_filler'] = {}
-		layerDef[ipKey]['weight_filler']['type'] = '"gaussian"'
-		layerDef[ipKey]['weight_filler']['std']  = str(0.005)
-		layerDef[ipKey]['bias_filler'] = {}
-		layerDef[ipKey]['bias_filler']['type'] = '"constant"'
-		layerDef[ipKey]['bias_filler']['value']  = str(1.)
+  '''
+  layerDef = co.OrderedDict()
+  layerDef['name']  = '"%s"' % layerName
+  layerDef['type']  = '"%s"' % layerType
+  layerDef['bottom'] =	'"%s"' % bottom
+  #The prms for different layers. 
+  if layerType == 'InnerProduct':
+    layerDef['top']    = '"%s"' % layerName
+    layerDef['param'] = get_proto_dict('param_w', 'param', **kwargs)
+    paramDup = make_key('param', layerDef.keys())
+    layerDef[paramDup] = get_proto_dict('param_b', paramDup, **kwargs)
+    ipKey = 'inner_product_param'
+    layerDef[ipKey]  = co.OrderedDict()
+    if kwargs.has_key('num_output'):
+      layerDef[ipKey]['num_output'] = kwargs['num_output']
+    else:
+      layerDef[ipKey]['num_output'] = str(numOutput)
+    layerDef[ipKey]['weight_filler'] = {}
+    layerDef[ipKey]['weight_filler']['type'] = '"gaussian"'
+    layerDef[ipKey]['weight_filler']['std']  = str(0.005)
+    layerDef[ipKey]['bias_filler'] = {}
+    layerDef[ipKey]['bias_filler']['type'] = '"constant"'
+    layerDef[ipKey]['bias_filler']['value']  = str(1.)
 
-	elif layerType == 'Convolution':
-		if kwargs.has_key('top'):
-			layerDef['top'] = '"%s"' % kwargs['top']
-		else:
-			layerDef['top']    = '"%s"' % layerName
-		layerDef['param'] = get_proto_dict('param_w', 'param', **kwargs)
-		paramDup = make_key('param', layerDef.keys())
-		layerDef[paramDup] = get_proto_dict('param_b', paramDup, **kwargs)
-		ipKey = 'convolution_param'
-		layerDef[ipKey]  = co.OrderedDict()
-		if kwargs.has_key('num_output'):
-			layerDef[ipKey]['num_output'] = kwargs['num_output']
-		else:
-			layerDef[ipKey]['num_output'] = str(numOutput)
-		layerDef[ipKey]['kernel_size']  = kwargs['kernel_size']
-		layerDef[ipKey]['stride']       = kwargs['stride']
-		if kwargs.has_key('pad'):
-			layerDef[ipKey]['pad'] = kwargs['pad']
-		if kwargs.has_key('group'):
-			layerDef[ipKey]['group'] = kwargs['group']	
-		layerDef[ipKey]['weight_filler'] = {}
-		layerDef[ipKey]['weight_filler']['type'] = '"gaussian"'
-		layerDef[ipKey]['weight_filler']['std']  = str(0.01)
-		layerDef[ipKey]['bias_filler'] = {}
-		layerDef[ipKey]['bias_filler']['type'] = '"constant"'
-		layerDef[ipKey]['bias_filler']['value']  = str(0.)
+  elif layerType == 'Convolution':
+    if kwargs.has_key('top'):
+      layerDef['top'] = '"%s"' % kwargs['top']
+    else:
+      layerDef['top']    = '"%s"' % layerName
+    layerDef['param'] = get_proto_dict('param_w', 'param', **kwargs)
+    paramDup = make_key('param', layerDef.keys())
+    layerDef[paramDup] = get_proto_dict('param_b', paramDup, **kwargs)
+    ipKey = 'convolution_param'
+    layerDef[ipKey]  = co.OrderedDict()
+    if kwargs.has_key('num_output'):
+      layerDef[ipKey]['num_output'] = kwargs['num_output']
+    else:
+      layerDef[ipKey]['num_output'] = str(numOutput)
+    layerDef[ipKey]['kernel_size']  = kwargs['kernel_size']
+    layerDef[ipKey]['stride']       = kwargs['stride']
+    if kwargs.has_key('pad'):
+      layerDef[ipKey]['pad'] = kwargs['pad']
+    if kwargs.has_key('group'):
+      layerDef[ipKey]['group'] = kwargs['group']	
+    layerDef[ipKey]['weight_filler'] = {}
+    layerDef[ipKey]['weight_filler']['type'] = '"gaussian"'
+    #If weight/bias filler magnitudes are specified or not
+    if kwargs.has_key('wf_std'):
+      std = kwargs['wf_std']
+    else:
+      std = 0.01
+    if kwargs.has_key('bf_value'):
+      bfValue = kwargs['bf_value']
+    else:
+      bfValue = 0.
+    layerDef[ipKey]['weight_filler']['std']  = str(std)
+    layerDef[ipKey]['bias_filler'] = {}
+    layerDef[ipKey]['bias_filler']['type'] = '"constant"'
+    layerDef[ipKey]['bias_filler']['value']  = str(bfValue)
 
-	elif layerType in ['ReLU', 'Sigmoid']:
-		if kwargs.has_key('top'):
-			topName = kwargs['top']
-		else:
-			topName = layerName
-		layerDef['top'] = '"%s"' % topName
+  elif layerType in ['ReLU', 'Sigmoid']:
+    if kwargs.has_key('top'):
+      topName = kwargs['top']
+    else:
+      topName = layerName
+    layerDef['top'] = '"%s"' % topName
 
-	elif layerType == 'Pooling':
-		if kwargs.has_key('top'):
-			topName = kwargs['top']
-		else:
-			topName = layerName
-		layerDef['top'] = '"%s"' % topName
-		layerDef['pooling_param'] = {}
-		if kwargs.has_key('pool'):
-			poolType = kwargs['pool']
-		else:
-			poolType = 'MAX'
-		layerDef['pooling_param']['pool'] = poolType
-		layerDef['pooling_param']['kernel_size'] = kwargs['kernel_size']
-		layerDef['pooling_param']['stride']      = kwargs['stride']
-		if kwargs.has_key('pad'):
-			layerDef['pooling_param']['pad'] = kwargs['pad']
-	
-	elif layerType == 'LRN':
-		if kwargs.has_key('top'):
-			topName = kwargs['top']
-		else:
-			topName = layerName
-		layerDef['top'] = '"%s"' % topName
-		layerDef['lrn_param'] = {}
-		layerDef['lrn_param']['local_size'] = kwargs['local_size']
-		layerDef['lrn_param']['alpha']      = kwargs['alpha']
-		layerDef['lrn_param']['beta'] = kwargs['beta']
-		layerDef['lrn_param']['k']    = kwargs['k']
+  elif layerType == 'Pooling':
+    if kwargs.has_key('top'):
+      topName = kwargs['top']
+    else:
+      topName = layerName
+    layerDef['top'] = '"%s"' % topName
+    layerDef['pooling_param'] = {}
+    if kwargs.has_key('pool'):
+      poolType = kwargs['pool']
+    else:
+      poolType = 'MAX'
+    layerDef['pooling_param']['pool'] = poolType
+    layerDef['pooling_param']['kernel_size'] = kwargs['kernel_size']
+    layerDef['pooling_param']['stride']      = kwargs['stride']
+    if kwargs.has_key('pad'):
+      layerDef['pooling_param']['pad'] = kwargs['pad']
 
-	elif layerType=='Silence':
-		#Nothing to be done
-		pass
+  elif layerType == 'LRN':
+    if kwargs.has_key('top'):
+      topName = kwargs['top']
+    else:
+      topName = layerName
+    layerDef['top'] = '"%s"' % topName
+    layerDef['lrn_param'] = {}
+    layerDef['lrn_param']['local_size'] = kwargs['local_size']
+    layerDef['lrn_param']['alpha']      = kwargs['alpha']
+    layerDef['lrn_param']['beta'] = kwargs['beta']
+    layerDef['lrn_param']['k']    = kwargs['k']
 
-	elif layerType=='Dropout':
-		if kwargs.has_key('top'):
-			layerDef['top']    = '"%s"' % kwargs['top']
-		else:
-			layerDef['top']   = '"%s"' % layerName
-		layerDef['dropout_param'] = co.OrderedDict()
-		layerDef['dropout_param']['dropout_ratio'] = str(kwargs['dropout_ratio'])
+  elif layerType=='Silence':
+    #Nothing to be done
+    pass
 
-	elif layerType in ['Accuracy']:
-		assert kwargs.has_key('bottom2')
-		bottom2 = make_key('bottom', layerDef.keys())
-		layerDef[bottom2] = '"%s"' % kwargs['bottom2']
-		if kwargs.has_key('top'):
-			layerDef['top']   = '"%s"' % kwargs['top']
-		else:
-			layerDef['top']   = '"%s"' % layerName
+  elif layerType=='Dropout':
+    if kwargs.has_key('top'):
+      layerDef['top']    = '"%s"' % kwargs['top']
+    else:
+      layerDef['top']   = '"%s"' % layerName
+    layerDef['dropout_param'] = co.OrderedDict()
+    layerDef['dropout_param']['dropout_ratio'] = str(kwargs['dropout_ratio'])
 
-	elif layerType in ['EuclideanLoss', 'SoftmaxWithLoss']:
-		assert kwargs.has_key('bottom2')
-		bottom2 = make_key('bottom', layerDef.keys())
-		layerDef[bottom2] = '"%s"' % kwargs['bottom2']
-		if kwargs.has_key('top'):
-			layerDef['top']   = '"%s"' % kwargs['top']
-		else:
-			layerDef['top']   = '"%s"' % layerName
-		layerDef['loss_weight'] = 1
+  elif layerType in ['Accuracy']:
+    assert kwargs.has_key('bottom2')
+    bottom2 = make_key('bottom', layerDef.keys())
+    layerDef[bottom2] = '"%s"' % kwargs['bottom2']
+    if kwargs.has_key('top'):
+      layerDef['top']   = '"%s"' % kwargs['top']
+    else:
+      layerDef['top']   = '"%s"' % layerName
 
-	elif layerType in ['ContrastiveLoss']:
-		assert kwargs.has_key('bottom2') and kwargs.has_key('bottom3')
-		bottom2 = make_key('bottom', layerDef.keys())
-		layerDef[bottom2] = '"%s"' % kwargs['bottom2']
-		bottom3 = make_key('bottom', layerDef.keys())
-		layerDef[bottom3] = '"%s"' % kwargs['bottom3']
-		if kwargs.has_key('top'):
-			layerDef['top']   = '"%s"' % kwargs['top']
-		else:
-			layerDef['top']   = '"%s"' % layerName
-		#Add the contrastive loss margin
-		layerDef['contrastive_loss_param'] = co.OrderedDict()
-		if kwargs.has_key('margin'):
-			layerDef['constrastive_loss_param']['margin'] = kwargs['margin']
-		else:
-			layerDef['constrastive_loss_param']['margin'] = 1.0
-		layerDef['loss_weight'] = 1
+  elif layerType in ['EuclideanLoss', 'SoftmaxWithLoss']:
+    assert kwargs.has_key('bottom2')
+    bottom2 = make_key('bottom', layerDef.keys())
+    layerDef[bottom2] = '"%s"' % kwargs['bottom2']
+    if kwargs.has_key('top'):
+      layerDef['top']   = '"%s"' % kwargs['top']
+    else:
+      layerDef['top']   = '"%s"' % layerName
+    layerDef['loss_weight'] = 1
 
-	elif layerType == 'Concat':
-		assert kwargs.has_key('bottom2')
-		assert kwargs.has_key('concat_dim')
-		if type(kwargs['bottom2'])==list:
-			for bot in kwargs['bottom2']:
-				bottom2 = make_key('bottom', layerDef.keys())
-				layerDef[bottom2] = '"%s"' % bot
-		else:
-			bottom2 = make_key('bottom', layerDef.keys())
-			layerDef[bottom2] = '"%s"' % kwargs['bottom2']
-		layerDef['concat_param'] = co.OrderedDict()
-		layerDef['concat_param']['concat_dim'] = kwargs['concat_dim']
-		if kwargs.has_key('top'):
-			layerDef['top']   = '"%s"' % kwargs['top']
-		else:
-			layerDef['top']   = '"%s"' % layerName
+  elif layerType in ['ContrastiveLoss']:
+    assert kwargs.has_key('bottom2') and kwargs.has_key('bottom3')
+    bottom2 = make_key('bottom', layerDef.keys())
+    layerDef[bottom2] = '"%s"' % kwargs['bottom2']
+    bottom3 = make_key('bottom', layerDef.keys())
+    layerDef[bottom3] = '"%s"' % kwargs['bottom3']
+    if kwargs.has_key('top'):
+      layerDef['top']   = '"%s"' % kwargs['top']
+    else:
+      layerDef['top']   = '"%s"' % layerName
+    #Add the contrastive loss margin
+    layerDef['contrastive_loss_param'] = co.OrderedDict()
+    if kwargs.has_key('margin'):
+      layerDef['constrastive_loss_param']['margin'] = kwargs['margin']
+    else:
+      layerDef['constrastive_loss_param']['margin'] = 1.0
+    layerDef['loss_weight'] = 1
 
-	elif layerType in ['DeployData']:
-		layerDef['input'] = '"%s"' % layerName
-		ipDims = kwargs['ipDims'] #(batch_size, channels, h, w)
-		layerDef['input_dim'] = ipDims[0]
-		key  = make_key('input_dim', layerDef.keys())
-		layerDef[key] = ipDims[1]
-		layerDef[make_key('input_dim', layerDef.keys())] = ipDims[2]		
-		layerDef[make_key('input_dim', layerDef.keys())] = ipDims[3]		
+  elif layerType == 'Concat':
+    assert kwargs.has_key('bottom2')
+    assert kwargs.has_key('concat_dim')
+    if type(kwargs['bottom2'])==list:
+      for bot in kwargs['bottom2']:
+        bottom2 = make_key('bottom', layerDef.keys())
+        layerDef[bottom2] = '"%s"' % bot
+    else:
+      bottom2 = make_key('bottom', layerDef.keys())
+      layerDef[bottom2] = '"%s"' % kwargs['bottom2']
+    layerDef['concat_param'] = co.OrderedDict()
+    layerDef['concat_param']['concat_dim'] = kwargs['concat_dim']
+    if kwargs.has_key('top'):
+      layerDef['top']   = '"%s"' % kwargs['top']
+    else:
+      layerDef['top']   = '"%s"' % layerName
 
-	elif layerType in ['MemoryData']:
-		del layerDef['bottom']
-		#First top
-		assert kwargs.has_key('top')
-		layerDef['top'] = '"%s"' % kwargs['top']
-		#Second top
-		key    = make_key('top', layerDef.keys())
-		if kwargs.has_key('top2'):	
-			keyVal = kwargs['top2']
-		else:
-			keyVal = 'ignore'
-		layerDef[key] = '"%s"' % keyVal
-		#Input dimensions
-		ipDims = kwargs['ipDims'] #(batch_size, channels, h, w)
-		layerDef['memory_data_param'] = dict()
-		layerDef['memory_data_param']['batch_size'] = ipDims[0]
-		layerDef['memory_data_param']['channels']   = ipDims[1]
-		layerDef['memory_data_param']['height']     = ipDims[2]
-		layerDef['memory_data_param']['width']      = ipDims[3]
-		
-	elif layerType in ['RandomNoise']:
-		layerDef['top']    = '"%s"' % layerName
-		if kwargs.has_key('adaptive_sigma'):
-			layerDef['random_noise_param'] = co.OrderedDict()
-			layerDef['random_noise_param']['adaptive_sigma']  = kwargs['adaptive_sigma']
-			layerDef['random_noise_param']['adaptive_factor'] = kwargs['adaptive_factor'] 		
+  elif layerType in ['DeployData']:
+    layerDef['input'] = '"%s"' % layerName
+    ipDims = kwargs['ipDims'] #(batch_size, channels, h, w)
+    layerDef['input_dim'] = ipDims[0]
+    key  = make_key('input_dim', layerDef.keys())
+    layerDef[key] = ipDims[1]
+    layerDef[make_key('input_dim', layerDef.keys())] = ipDims[2]		
+    layerDef[make_key('input_dim', layerDef.keys())] = ipDims[3]		
 
-	elif layerType in ['gaussRender']:
-		if kwargs.has_key('top'):
-			layerDef['top'] = '"%s"' %  kwargs['top']
-		else:
-			layerDef['top']    = '"%s"' % layerName
-		layerDef['type']   = '"Python"'
-		layerDef['python_param'] = co.OrderedDict()
-		layerDef['python_param']['module'] = '"python_ief"'
-		layerDef['python_param']['layer']  = '"GaussRenderLayer"'
-		paramStr = ou.make_python_param_str(kwargs, ignoreKeys=['top'])
-		layerDef['python_param']['param_str'] = '"%s"' % paramStr
+  elif layerType in ['MemoryData']:
+    del layerDef['bottom']
+    #First top
+    assert kwargs.has_key('top')
+    layerDef['top'] = '"%s"' % kwargs['top']
+    #Second top
+    key    = make_key('top', layerDef.keys())
+    if kwargs.has_key('top2'):	
+      keyVal = kwargs['top2']
+    else:
+      keyVal = 'ignore'
+    layerDef[key] = '"%s"' % keyVal
+    #Input dimensions
+    ipDims = kwargs['ipDims'] #(batch_size, channels, h, w)
+    layerDef['memory_data_param'] = dict()
+    layerDef['memory_data_param']['batch_size'] = ipDims[0]
+    layerDef['memory_data_param']['channels']   = ipDims[1]
+    layerDef['memory_data_param']['height']     = ipDims[2]
+    layerDef['memory_data_param']['width']      = ipDims[3]
+    
+  elif layerType in ['RandomNoise']:
+    layerDef['top']    = '"%s"' % layerName
+    if kwargs.has_key('adaptive_sigma'):
+      layerDef['random_noise_param'] = co.OrderedDict()
+      layerDef['random_noise_param']['adaptive_sigma']  = kwargs['adaptive_sigma']
+      layerDef['random_noise_param']['adaptive_factor'] = kwargs['adaptive_factor'] 		
 
-	else:
-		raise Exception('%s layer type not found' % layerType)
-	return layerDef
+  elif layerType in ['gaussRender']:
+    if kwargs.has_key('top'):
+      layerDef['top'] = '"%s"' %  kwargs['top']
+    else:
+      layerDef['top']    = '"%s"' % layerName
+    layerDef['type']   = '"Python"'
+    layerDef['python_param'] = co.OrderedDict()
+    layerDef['python_param']['module'] = '"python_ief"'
+    layerDef['python_param']['layer']  = '"GaussRenderLayer"'
+    paramStr = ou.make_python_param_str(kwargs, ignoreKeys=['top'])
+    layerDef['python_param']['param_str'] = '"%s"' % paramStr
+
+  else:
+    raise Exception('%s layer type not found' % layerType)
+  return layerDef
 
 ##
 # Get the layerdefs for siamese layers

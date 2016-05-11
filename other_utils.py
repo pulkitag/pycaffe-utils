@@ -2,7 +2,7 @@
 #  Miscellaneous Util Functions
 #
 import numpy as np
-import scipy.misc as scm
+#import scipy.misc as scm
 import matplotlib.pyplot as plt
 import copy
 import os

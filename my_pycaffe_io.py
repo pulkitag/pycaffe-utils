@@ -384,63 +384,92 @@ class SiameseDbReader(DbReader):
 ##
 # Read two LMDBs simultaneosuly
 class DoubleDbReader(object):
-	def __init__(self, dbNames, isLMDB=True, readahead=True, 
-							 wrapAround=False, isMulti=False):
-		'''
-				wrapAround: False - return None, None if end of file is reached
-										True  - move to the first element
-				isMulti   : False - read only two dbs v(flag for backward compatibility)
-									  True  - read from arbitrary number of dbs
-		'''
-		#For large LMDB set readahead to be False
-		self.dbs_     = []
-		self.isMulti_ = isMulti
-		for d in dbNames:
-			self.dbs_.append(DbReader(d, isLMDB=isLMDB, readahead=readahead,
-												wrapAround=wrapAround))	
+  def __init__(self, dbNames, isLMDB=True, readahead=True, 
+               wrapAround=False, isMulti=False):
+    '''
+        wrapAround: False - return None, None if end of file is reached
+                    True  - move to the first element
+        isMulti   : False - read only two dbs v(flag for backward compatibility)
+                    True  - read from arbitrary number of dbs
+    '''
+    #For large LMDB set readahead to be False
+    self.dbs_     = []
+    self.isMulti_ = isMulti
+    for d in dbNames:
+      self.dbs_.append(DbReader(d, isLMDB=isLMDB, readahead=readahead,
+                        wrapAround=wrapAround))	
 
-	def __del__(self):
-		for db in self.dbs_:
-			db.__del__()
-	
-	def read_key(self, keys):
-		data = []
-		for db, key in zip(self.dbs_, keys):
-			dat, _ = db.read_key(key)
-			data.append(dat)
-		return data
-	
-	def read_next(self):
-		data = []
-		for db in self.dbs_:
-			dat,_ = db.read_next()
-			data.append(dat)
-		if self.isMulti_:
-			return data
-		else:
-			return data[0], data[1]
+  def __del__(self):
+    for db in self.dbs_:
+      db.__del__()
 
-	def read_batch(self, batchSz):
-		data = []
-		for db in self.dbs_:
-			dat,_ = db.read_batch(batchSz)
-			data.append(dat)
-		return data[0], data[1]
+  #Check that all the DBs have the exact same set of keys
+  def check_key_consistency(self):
+    isConsistent = True
+    keyList = []
+    for db in self.dbs_:
+      keyList.append(db.get_key_all())
+    numDb = len(self.dbs_)
+    #verify the length of all keys is the same
+    numKeys = len(keyList[0])
+    for i in range(numDb):
+      isConsistent = isConsistent and numKeys == len(keyList[i])
+    if not isConsistent:
+      return False
+    #If the number of keys are the same check that
+    #keys have the exact the same value
+    for n in range(numDb):
+      for i in range(numKeys): 
+        key = keyList[0][i]
+        isConsistent = isConsistent and (key == keyList[n][i])
+    return isConsistent
 
-	def read_batch_data_label(self, batchSz):
-		data, label = [], []
-		for db in self.dbs_:
-			dat,lb = db.read_batch(batchSz)
-			data.append(dat)
-			label.append(lb)
-		if self.isMulti_:
-			return data, label
-		else:
-			return data[0], data[1], label[0], label[1]
+  def read_key(self, keys):
+    data = []
+    for db, key in zip(self.dbs_, keys):
+      dat, _ = db.read_key(key)
+      data.append(dat)
+    return data
 
-	def close(self):
-		for db in self.dbs_:
-			db.close()
+  #Read a common key from all the dbs
+  def read_common_key(self, key):
+    data = []
+    for db in self.dbs_:
+      dat, _ = db.read_key(key)
+      data.append(dat)
+    return data
+
+  def read_next(self):
+    data = []
+    for db in self.dbs_:
+      dat,_ = db.read_next()
+      data.append(dat)
+    if self.isMulti_:
+      return data
+    else:
+      return data[0], data[1]
+
+  def read_batch(self, batchSz):
+    data = []
+    for db in self.dbs_:
+      dat,_ = db.read_batch(batchSz)
+      data.append(dat)
+    return data[0], data[1]
+
+  def read_batch_data_label(self, batchSz):
+    data, label = [], []
+    for db in self.dbs_:
+      dat,lb = db.read_batch(batchSz)
+      data.append(dat)
+      label.append(lb)
+    if self.isMulti_:
+      return data, label
+    else:
+      return data[0], data[1], label[0], label[1]
+
+  def close(self):
+    for db in self.dbs_:
+      db.close()
 
 ##
 # Read multiple LMDBs simultaneosuly

@@ -12,6 +12,7 @@ import pdb
 import my_pycaffe as mp
 import my_pycaffe_io as mpio
 import scipy
+from matplotlib import gridspec
 
 TMP_DATA_DIR = '/data1/pulkitag/others/caffe_tmp_data/'
 
@@ -20,43 +21,51 @@ TMP_DATA_DIR = '/data1/pulkitag/others/caffe_tmp_data/'
 def plot_n_ims(ims, fig=None, titleStr='', figTitle='',
 				 axTitles = None, subPlotShape=None,
 				 isBlobFormat=False, chSwap=None, trOrder=None):
-	'''
-		isBlobFormat: Caffe stores images as ch x h x w
-									True - convert the images into h x w x ch format
-		trOrder     : If certain transpose order of channels is to be used
-									overrides isBlobFormat
-	'''
-	ims = copy.deepcopy(ims)
-	if trOrder is not None:
-		for i, im in enumerate(ims):
-			ims[i] = im.transpose(trOrder)
-	if trOrder is None and isBlobFormat:
-		for i, im in enumerate(ims):
-			ims[i] = im.transpose((1,2,0))
-	if chSwap is not None:
-		for i, im in enumerate(ims):
-			ims[i] = im[:,:,chSwap]
-	plt.ion()
-	if fig is None:
-		fig = plt.figure()
-	plt.figure(fig.number)
-	plt.clf()
-	if subPlotShape is None:
-		N = np.ceil(np.sqrt(len(ims)))
-		subPlotShape = (N,N)
-	ax = []
-	for i in range(len(ims)):
-		shp = subPlotShape + (i+1,)
-		ax.append(fig.add_subplot(*shp))
+  '''
+    ims: list of images
+    isBlobFormat: Caffe stores images as ch x h x w
+                  True - convert the images into h x w x ch format
+    trOrder     : If certain transpose order of channels is to be used
+                  overrides isBlobFormat
+  '''
+  ims = copy.deepcopy(ims)
+  if trOrder is not None:
+    for i, im in enumerate(ims):
+      ims[i] = im.transpose(trOrder)
+  if trOrder is None and isBlobFormat:
+    for i, im in enumerate(ims):
+      ims[i] = im.transpose((1,2,0))
+  if chSwap is not None:
+    for i, im in enumerate(ims):
+      ims[i] = im[:,:,chSwap]
+  plt.ion()
+  if fig is None:
+    fig = plt.figure()
+  plt.figure(fig.number)
+  plt.clf()
+  if subPlotShape is None:
+    N = np.ceil(np.sqrt(len(ims)))
+    subPlotShape = (N,N)
+    #gs = gridspec.GridSpec(N, N)
+  ax = []
+  for i in range(len(ims)):
+    shp = subPlotShape + (i+1,)
+    aa  = fig.add_subplot(*shp)
+    aa.autoscale(False)
+    ax.append(aa)
+    #ax.append(plt.subplot(gs[i]))
 
-	for i, im in enumerate(ims):
-		ax[i].imshow(im.astype(np.uint8))
-		ax[i].axis('off')
-		if axTitles is not None:
-			ax[i].set_title(axTitles[i])
-	fig.suptitle(figTitle)
-	plt.show()
-	return ax
+  for i, im in enumerate(ims):
+    ax[i].set_ylim(0, im.shape[0])
+    ax[i].set_xlim(0, im.shape[1])
+    ax[i].imshow(im.astype(np.uint8))
+    ax[i].axis('off')
+    if axTitles is not None:
+      ax[i].set_title(axTitles[i])
+  if len(figTitle) > 0:
+    fig.suptitle(figTitle)
+  plt.show()
+  return ax
 
 
 def plot_pairs(im1, im2, **kwargs):
