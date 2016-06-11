@@ -404,25 +404,38 @@ class DoubleDbReader(object):
       db.__del__()
 
   #Check that all the DBs have the exact same set of keys
-  def check_key_consistency(self):
+  def check_key_consistency(self, softOnLength=False):
+    '''
+      checks that all the LMDBs have the same set of keys
+      softOnLength: True - if the LMDBs have different lenth
+                    chose the length to be smalles across all
+                    sequences. 
+    '''
     isConsistent = True
     keyList = []
     for db in self.dbs_:
       keyList.append(db.get_key_all())
     numDb = len(self.dbs_)
     #verify the length of all keys is the same
-    numKeys = len(keyList[0])
+    numKeys = [len(keyList[i]) for i in range(numDb)]
     for i in range(numDb):
-      isConsistent = isConsistent and numKeys == len(keyList[i])
+      isConsistent = isConsistent and keyList[0] == len(keyList[i])
+    #If hard consistency is enforced return
+    if not isConsistent and not softOnLength:
+      return False, None
+    #if inconsistency on lengths is allowed
     if not isConsistent:
-      return False
+      nK = min(numKeys)
+      isConsistent = True
+    else:
+      nK = numKeys[0]
     #If the number of keys are the same check that
     #keys have the exact the same value
     for n in range(numDb):
-      for i in range(numKeys): 
+      for i in range(nK): 
         key = keyList[0][i]
         isConsistent = isConsistent and (key == keyList[n][i])
-    return isConsistent
+    return isConsistent, nK
 
   def read_key(self, keys):
     data = []

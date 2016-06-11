@@ -20,13 +20,15 @@ TMP_DATA_DIR = '/data1/pulkitag/others/caffe_tmp_data/'
 #Plot n images
 def plot_n_ims(ims, fig=None, titleStr='', figTitle='',
 				 axTitles = None, subPlotShape=None,
-				 isBlobFormat=False, chSwap=None, trOrder=None):
+				 isBlobFormat=False, chSwap=None, trOrder=None,
+         showType=None):
   '''
     ims: list of images
     isBlobFormat: Caffe stores images as ch x h x w
                   True - convert the images into h x w x ch format
     trOrder     : If certain transpose order of channels is to be used
                   overrides isBlobFormat
+    showType    : imshow or matshow (by default imshow)
   '''
   ims = copy.deepcopy(ims)
   if trOrder is not None:
@@ -55,10 +57,19 @@ def plot_n_ims(ims, fig=None, titleStr='', figTitle='',
     ax.append(aa)
     #ax.append(plt.subplot(gs[i]))
 
+  if showType is None:
+    showType = ['imshow'] * len(ims)
+  else:
+    assert len(showType) == len(ims)
+
   for i, im in enumerate(ims):
-    ax[i].set_ylim(0, im.shape[0])
+    ax[i].set_ylim(im.shape[0], 0)
     ax[i].set_xlim(0, im.shape[1])
-    ax[i].imshow(im.astype(np.uint8))
+    if showType[i] == 'imshow':
+      ax[i].imshow(im.astype(np.uint8))
+    elif showType[i] == 'matshow':
+      res = ax[i].matshow(im)
+      plt.colorbar(res, ax=ax[i])
     ax[i].axis('off')
     if axTitles is not None:
       ax[i].set_title(axTitles[i])
