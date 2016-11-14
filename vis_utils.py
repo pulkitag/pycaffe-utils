@@ -4,13 +4,16 @@
 import numpy as np
 import scipy.misc as scm
 import matplotlib.pyplot as plt
-import my_pycaffe_utils as mpu
 import copy
 import os
-import caffe
 import pdb
-import my_pycaffe as mp
-import my_pycaffe_io as mpio
+try:
+  import caffe
+  import my_pycaffe_utils as mpu
+  import my_pycaffe as mp
+  import my_pycaffe_io as mpio
+except:
+  print ('CAFFE PACKAGES CANNOT BE LOADED')
 import scipy
 from matplotlib import gridspec
 
@@ -102,6 +105,69 @@ def plot_pairs_iterfun(ifun, **kwargs):
 		ip = raw_input('Press Enter for next pair')
 		if ip == 'q':
 			pltFlag = False	
+
+
+class MyAnimation(object):
+  def __init__(self, vis_func, frames=100, fps=20, height=200, width=200, fargs=[]):
+    self.frames = frames
+    self.vis_func = vis_func
+    self.vis_func_args = fargs
+    self.fps = fps
+    self.fig, self.ax = plt.subplots(1,1)
+    plt.show(block=False)
+    self.bg = self.fig.canvas.copy_from_bbox(self.ax.bbox)
+    im = np.zeros((height, width, 3)).astype(np.uint8)
+    self.image_obj = self.ax.imshow(im)
+    self.fig.canvas.draw()
+
+  def __del__(self):
+    plt.close(self.fig)
+
+  def run(self, fargs=[]):
+    if len(fargs)==0:
+      func_args = self.vis_func_args
+    else:
+      func_args = fargs
+    time_diff = float(1.0)/self.fps
+    for i in range(self.frames):
+      op = self.vis_func(i, *func_args)
+      if type(op) == tuple:
+        im, is_stop = op
+      else:
+        im = op
+        is_stop = False
+      self._display(im)
+      time.sleep(time_diff)
+      if is_stop:
+        break
+      
+  def _display(self, pixels):
+    self.image_obj.set_data(pixels)
+    self.fig.canvas.restore_region(self.bg)
+    self.ax.draw_artist(self.image_obj)
+    self.fig.canvas.blit(self.ax.bbox)
+
+
+def draw_square_on_im(im, sq, width=4, col='w'):
+  x1, y1, x2, y2 = sq
+  h = im.shape[0]
+  w = im.shape[1]
+  if col == 'w':
+    col = (255 * np.ones((1,1,3))).astype(np.uint8)
+  elif col == 'r':
+    col = np.zeros((1,1,3))
+    col[0,0,0] = 255
+    col =  col.astype(np.uint8)
+  #Top Line
+  im[max(0,int(y1-width/2)):min(h, y1+int(width/2)),x1:x2,:] = col
+  #Bottom line
+  im[max(0,int(y2-width/2)):min(h, y2+int(width/2)),x1:x2,:] = col
+  #Left line
+  im[y1:y2, max(0,int(x1-width/2)):min(h, x1+int(width/2))] = col
+  #Right line
+  im[y1:y2, max(0,int(x2-width/2)):min(h, x2+int(width/2))] = col
+  return im
+
 
 ##
 # Visualize GenericWindowDataLayer file
