@@ -6,6 +6,7 @@ Dependencies
 -------------
 This is not an exhaustive list. 
 ```
+git clone https://github.com/pulkitag/pyhelper_fns.git
 sudo apt-get install liblmdb-dev
 sudo pip install lmdb
 ```
